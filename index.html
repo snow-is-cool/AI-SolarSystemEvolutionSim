@@ -21,16 +21,21 @@
             padding: 1rem; /* Add some padding to the body for mobile */
             box-sizing: border-box; /* Include padding in element's total width and height */
         }
+        .canvas-container { /* New container for canvas and stats */
+            position: relative; /* Make this the positioning context for absolute children */
+            width: 100%;
+            height: 400px; /* Fixed height for the canvas container, adjust as needed */
+            margin-bottom: 1.5rem; /* Keep original margin below the container */
+            border-radius: 0.75rem; /* Apply rounded corners to container */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Apply shadow to container */
+            background-color: #00001a; /* Apply background to container */
+        }
         canvas {
-            background-color: #00001a; /* Very dark blue for space */
-            border-radius: 0.75rem; /* Rounded corners for canvas */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Subtle shadow */
             display: block; /* Remove extra space below canvas */
-            touch-action: pan-x pan-y pinch-zoom; /* Enable pinch zoom and panning on canvas */
-            margin-bottom: 1.5rem;
+            width: 100%; /* Fill the container */
+            height: 100%; /* Fill the container */
             cursor: grab; /* Indicate draggable */
-            max-width: 100%; /* Ensure canvas doesn't overflow container */
-            height: auto; /* Maintain aspect ratio */
+            /* Removed background-color, border-radius, box-shadow from canvas */
         }
         canvas:active {
             cursor: grabbing; /* Indicate dragging */
@@ -82,7 +87,7 @@
         .btn-secondary:hover {
             background-color: #718096;
         }
-        .info-display {
+        .info-panel { /* General style for information displays */
             background-color: rgba(0, 0, 0, 0.4);
             padding: 0.5rem 1rem;
             border-radius: 0.5rem;
@@ -91,6 +96,24 @@
             text-align: center; /* Center the info display text */
             width: 100%; /* Ensure it takes full width */
             box-sizing: border-box;
+        }
+        .stats-display { /* Specific style for the dynamic stats panel */
+            position: absolute; /* Position relative to the canvas-container */
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.6); /* Slightly more opaque for visibility */
+            font-size: 0.75rem;
+            text-align: right; /* Align text within the stats box */
+            color: #e2e8f0;
+            z-index: 10; /* Ensure it's above the canvas elements */
+            opacity: 1;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .stats-display.hidden {
+            opacity: 0;
+            pointer-events: none; /* Prevent interaction when hidden */
         }
         .main-content-wrapper {
             width: 100%;
@@ -128,9 +151,15 @@
                 padding: 0.6rem 1.2rem; /* Adjust padding */
                 font-size: 0.85rem;
             }
-            .info-display {
+            .info-panel { /* Adjusted for mobile */
                 font-size: 0.75rem; /* Smaller font for stats on mobile */
                 padding: 0.4rem 0.8rem;
+            }
+            .stats-display {
+                top: 0.5rem;
+                right: 0.5rem;
+                font-size: 0.65rem;
+                padding: 0.3rem 0.6rem;
             }
             h1 {
                 font-size: 2rem; /* Adjust heading size */
@@ -145,7 +174,8 @@
 <body>
     <div class="main-content-wrapper p-6 bg-gray-800 rounded-xl shadow-lg mx-auto my-8">
         <h1 class="text-3xl font-bold mb-6 text-blue-300">2D Solar System Evolution</h1>
-        <canvas id="solarSystemCanvas" class="w-full h-96"></canvas>
+        <div class="canvas-container"> <canvas id="solarSystemCanvas"></canvas>
+            <div id="statsDisplay" class="stats-display hidden"></div> </div>
 
         <div class="controls-container">
             <div class="control-group">
@@ -162,8 +192,7 @@
             <button id="toggleTrackingBtn" class="btn-primary">Toggle Tracking</button>
         </div>
 
-        <div class="info-display">
-            Simulation Time: <span id="simTimeDisplay">0</span> frames
+        <div id="simTimeContainer" class="info-panel"> Simulation Time: <span id="simTimeDisplay">0</span> frames
         </div>
         <p class="mt-4 text-sm text-gray-400 text-center">
             Watch as small particles orbit a central star and collide, simulating gravitational interactions.
@@ -179,6 +208,7 @@
         const simTimeDisplay = document.getElementById('simTimeDisplay');
         const pausePlayBtn = document.getElementById('pausePlayBtn');
         const toggleTrackingBtn = document.getElementById('toggleTrackingBtn');
+        const statsDisplay = document.getElementById('statsDisplay'); // Get reference to the stats div
 
         // Zoom control buttons
         const zoomInBtn = document.getElementById('zoomInBtn');
@@ -346,6 +376,7 @@
             cameraWorldX = 0; // Center camera on world (0,0)
             cameraWorldY = 0; // Center camera on world (0,0)
             toggleTrackingBtn.textContent = 'Toggle Tracking'; // Reset button text
+            statsDisplay.classList.add('hidden'); // Hide stats on reset
         }
 
         // Resets only the view (camera position and zoom) without affecting the simulation
@@ -359,6 +390,7 @@
             trackingOffsetX = 0;
             trackingOffsetY = 0;
             toggleTrackingBtn.textContent = 'Toggle Tracking';
+            statsDisplay.classList.add('hidden'); // Hide stats on view reset
         }
 
         // Initializes the simulation with a star and orbiting particles
@@ -600,7 +632,7 @@
         }
 
         /**
-         * Draws information about the tracked cluster in a fixed screen position.
+         * Updates the content of the stats display HTML element.
          * @param {number} clusterWorldX - The world X coordinate of the cluster's center.
          * @param {number} clusterWorldY - The world Y coordinate of the cluster's center.
          * @param {number} speed - The estimated speed of the cluster.
@@ -610,39 +642,19 @@
          * @param {number} vy - The y-component of the cluster's velocity.
          * @param {number} circularity - The estimated circularity of the cluster (0-1).
          */
-        function drawClusterInfo(clusterWorldX, clusterWorldY, speed, rotation, mass, vx, vy, circularity) {
-            const paddingRight = 20; // Padding from the right edge of the canvas
-            const paddingTop = 20;   // Padding from the top edge of the canvas
-            const lineHeight = 16;   // Fixed line height in pixels
-            const fontSize = 14;     // Fixed font size in pixels
-
-            ctx.fillStyle = '#e2e8f0'; // Light text color
-            ctx.textAlign = 'right';   // Align text to the right
-            ctx.font = `${fontSize}px Arial`;
-
-            let currentY = paddingTop;
-            const currentX = canvas.width - paddingRight; // Fixed X position for top right corner
-
-            ctx.fillText(`STATS:`, currentX, currentY);
-            currentY += lineHeight;
-
-            // Display the world coordinates directly
-            ctx.fillText(`Pos: (${clusterWorldX.toFixed(0)}, ${clusterWorldY.toFixed(0)})`, currentX, currentY);
-            currentY += lineHeight;
-
-            ctx.fillText(`Vx: ${vx.toFixed(2)} Vy: ${vy.toFixed(2)}`, currentX, currentY);
-            currentY += lineHeight;
-
-            ctx.fillText(`Average Speed: ${speed.toFixed(2)}`, currentX, currentY);
-            currentY += lineHeight;
-
-            ctx.fillText(`Mass: ${mass.toFixed(2)}`, currentX, currentY);
-            currentY += lineHeight;
-
-            ctx.fillText(`Rotation Speed: ${rotation.toFixed(2)}°/frame`, currentX, currentY);
-            currentY += lineHeight;
-
-            ctx.fillText(`Circularity: ${circularity.toFixed(4)}`, currentX, currentY);
+        function updateStatsDisplay(clusterWorldX, clusterWorldY, speed, rotation, mass, vx, vy, circularity) {
+            const statsContent = `
+                <div>
+                    <span style="font-weight: bold;">STATS:</span><br>
+                    Pos: (${clusterWorldX.toFixed(0)}, ${clusterWorldY.toFixed(0)})<br>
+                    Vx: ${vx.toFixed(2)} Vy: ${vy.toFixed(2)}<br>
+                    Average Speed: ${speed.toFixed(2)}<br>
+                    Mass: ${mass.toFixed(2)}<br>
+                    Rotation Speed: ${rotation.toFixed(2)}°/frame<br>
+                    Circularity: ${circularity.toFixed(4)}
+                </div>
+            `;
+            statsDisplay.innerHTML = statsContent;
         }
 
         // Main animation loop
@@ -651,11 +663,10 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
 
-            // Reset cluster info to draw for this frame
-            window._clusterInfoToDraw = null;
-
             // Calculate cluster stats if tracking is active, regardless of pause state
             if (isTracking && trackedParticle) {
+                statsDisplay.classList.remove('hidden'); // Show stats panel
+
                 const currentCluster = findCluster(trackedParticle);
 
                 let clusterCenterX = trackedParticle.x;
@@ -740,17 +751,17 @@
                 }
 
 
-                // Store all necessary data for drawing the info block *after* context restore
-                window._clusterInfoToDraw = {
-                    worldX: clusterCenterX,
-                    worldY: clusterCenterY,
-                    speed: estimatedSpeed,
-                    rotation: rotationSpeedDeg,
-                    mass: totalMass,
-                    vx: clusterVx,
-                    vy: clusterVy,
-                    circularity: circularity
-                };
+                // Update the stats display HTML element
+                updateStatsDisplay(
+                    clusterCenterX,
+                    clusterCenterY,
+                    estimatedSpeed,
+                    rotationSpeedDeg,
+                    totalMass,
+                    clusterVx,
+                    clusterVy,
+                    circularity
+                );
 
                 // Apply WASD movement only if not paused
                 if (!isPaused) {
@@ -770,22 +781,7 @@
 
 
             } else {
-                // When not tracking, display star's position in stats
-                const star = particles.find(p => p.isStar);
-                if (star) {
-                    window._clusterInfoToDraw = {
-                        worldX: star.x,
-                        worldY: star.y,
-                        speed: 0, // Star is stationary
-                        rotation: 0, // Star is stationary
-                        mass: star.mass,
-                        vx: 0,
-                        vy: 0,
-                        circularity: 1.0 // Star is a perfect circle
-                    };
-                } else {
-                    window._clusterInfoToDraw = null; // No star, no stats
-                }
+                statsDisplay.classList.add('hidden'); // Hide stats panel when not tracking
 
                 // Direct WASD control of cameraWorldX/Y when not tracking
                 if (!isPaused) { // Only move camera if not paused
@@ -863,20 +859,6 @@
             }
 
             ctx.restore(); // Restore context to default (no zoom/pan)
-
-            // Draw cluster info AFTER restoring the context
-            if (window._clusterInfoToDraw) {
-                drawClusterInfo(
-                    window._clusterInfoToDraw.worldX,
-                    window._clusterInfoToDraw.worldY,
-                    window._clusterInfoToDraw.speed,
-                    window._clusterInfoToDraw.rotation,
-                    window._clusterInfoToDraw.mass,
-                    window._clusterInfoToDraw.vx,
-                    window._clusterInfoToDraw.vy,
-                    window._clusterInfoToDraw.circularity // Pass circularity
-                );
-            }
         }
 
         // --- Event Listeners and Initialization ---
@@ -897,7 +879,7 @@
             pausePlayBtn.textContent = isPaused ? 'Play' : 'Pause'; // Update button text
         });
 
-        // Event listener for the new toggle tracking button
+        // Event listener for clicking on a particle to track it
         canvas.addEventListener('click', (event) => {
             const rect = canvas.getBoundingClientRect();
             const clickX = event.clientX - rect.left;
@@ -930,10 +912,12 @@
                     // When untracking, reset camera to center on world (0,0)
                     cameraWorldX = 0;
                     cameraWorldY = 0;
+                    statsDisplay.classList.add('hidden'); // Hide stats
                 } else {
                     trackedParticle = clickedParticle;
                     isTracking = true;
                     toggleTrackingBtn.textContent = 'Tracking ON';
+                    statsDisplay.classList.remove('hidden'); // Show stats
 
                     // Immediately center camera on the cluster's center of mass
                     const initialCluster = findCluster(trackedParticle);
@@ -966,6 +950,7 @@
                 toggleTrackingBtn.textContent = 'Toggle Tracking';
                 trackingOffsetX = 0;
                 trackingOffsetY = 0;
+                statsDisplay.classList.add('hidden'); // Hide stats
             }
         });
 
@@ -981,6 +966,7 @@
                 // When untracking via button, reset camera to center on world (0,0)
                 cameraWorldX = 0;
                 cameraWorldY = 0;
+                statsDisplay.classList.add('hidden'); // Hide stats
             } else {
                 // If tracking is turned ON via button, and no particle was previously tracked,
                 // default to tracking the star.
@@ -991,6 +977,7 @@
                         cameraWorldY = trackedParticle.y; // Should be 0
                     }
                 }
+                statsDisplay.classList.remove('hidden'); // Show stats
             }
         });
 
