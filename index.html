@@ -91,13 +91,6 @@
             text-align: center; /* Center the info display text */
             width: 100%; /* Ensure it takes full width */
             box-sizing: border-box;
-            /* Added for smooth show/hide */
-            opacity: 1;
-            transition: opacity 0.3s ease-in-out;
-        }
-        .info-display.hidden {
-            opacity: 0;
-            pointer-events: none; /* Prevent interaction when hidden */
         }
         .main-content-wrapper {
             width: 100%;
@@ -169,7 +162,8 @@
             <button id="toggleTrackingBtn" class="btn-primary">Toggle Tracking</button>
         </div>
 
-        <div id="statsDisplay" class="info-display hidden"> Simulation Time: <span id="simTimeDisplay">0</span> frames
+        <div class="info-display">
+            Simulation Time: <span id="simTimeDisplay">0</span> frames
         </div>
         <p class="mt-4 text-sm text-gray-400 text-center">
             Watch as small particles orbit a central star and collide, simulating gravitational interactions.
@@ -185,7 +179,6 @@
         const simTimeDisplay = document.getElementById('simTimeDisplay');
         const pausePlayBtn = document.getElementById('pausePlayBtn');
         const toggleTrackingBtn = document.getElementById('toggleTrackingBtn');
-        const statsDisplay = document.getElementById('statsDisplay'); // Get reference to the stats div
 
         // Zoom control buttons
         const zoomInBtn = document.getElementById('zoomInBtn');
@@ -353,7 +346,6 @@
             cameraWorldX = 0; // Center camera on world (0,0)
             cameraWorldY = 0; // Center camera on world (0,0)
             toggleTrackingBtn.textContent = 'Toggle Tracking'; // Reset button text
-            statsDisplay.classList.add('hidden'); // Hide stats on reset
         }
 
         // Resets only the view (camera position and zoom) without affecting the simulation
@@ -367,7 +359,6 @@
             trackingOffsetX = 0;
             trackingOffsetY = 0;
             toggleTrackingBtn.textContent = 'Toggle Tracking';
-            statsDisplay.classList.add('hidden'); // Hide stats on view reset
         }
 
         // Initializes the simulation with a star and orbiting particles
@@ -665,8 +656,6 @@
 
             // Calculate cluster stats if tracking is active, regardless of pause state
             if (isTracking && trackedParticle) {
-                statsDisplay.classList.remove('hidden'); // Show stats panel
-
                 const currentCluster = findCluster(trackedParticle);
 
                 let clusterCenterX = trackedParticle.x;
@@ -781,7 +770,6 @@
 
 
             } else {
-                statsDisplay.classList.add('hidden'); // Hide stats panel when not tracking
                 // When not tracking, display star's position in stats
                 const star = particles.find(p => p.isStar);
                 if (star) {
@@ -876,8 +864,8 @@
 
             ctx.restore(); // Restore context to default (no zoom/pan)
 
-            // Draw cluster info AFTER restoring the context, only if tracking is active
-            if (isTracking && window._clusterInfoToDraw) {
+            // Draw cluster info AFTER restoring the context
+            if (window._clusterInfoToDraw) {
                 drawClusterInfo(
                     window._clusterInfoToDraw.worldX,
                     window._clusterInfoToDraw.worldY,
@@ -909,7 +897,7 @@
             pausePlayBtn.textContent = isPaused ? 'Play' : 'Pause'; // Update button text
         });
 
-        // Event listener for clicking on a particle to track it
+        // Event listener for the new toggle tracking button
         canvas.addEventListener('click', (event) => {
             const rect = canvas.getBoundingClientRect();
             const clickX = event.clientX - rect.left;
@@ -942,12 +930,10 @@
                     // When untracking, reset camera to center on world (0,0)
                     cameraWorldX = 0;
                     cameraWorldY = 0;
-                    statsDisplay.classList.add('hidden'); // Hide stats
                 } else {
                     trackedParticle = clickedParticle;
                     isTracking = true;
                     toggleTrackingBtn.textContent = 'Tracking ON';
-                    statsDisplay.classList.remove('hidden'); // Show stats
 
                     // Immediately center camera on the cluster's center of mass
                     const initialCluster = findCluster(trackedParticle);
@@ -980,7 +966,6 @@
                 toggleTrackingBtn.textContent = 'Toggle Tracking';
                 trackingOffsetX = 0;
                 trackingOffsetY = 0;
-                statsDisplay.classList.add('hidden'); // Hide stats
             }
         });
 
@@ -996,7 +981,6 @@
                 // When untracking via button, reset camera to center on world (0,0)
                 cameraWorldX = 0;
                 cameraWorldY = 0;
-                statsDisplay.classList.add('hidden'); // Hide stats
             } else {
                 // If tracking is turned ON via button, and no particle was previously tracked,
                 // default to tracking the star.
@@ -1007,7 +991,6 @@
                         cameraWorldY = trackedParticle.y; // Should be 0
                     }
                 }
-                statsDisplay.classList.remove('hidden'); // Show stats
             }
         });
 
