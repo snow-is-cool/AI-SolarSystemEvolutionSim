@@ -15,7 +15,7 @@
             min-height: 100vh;
             background-color: #1a202c; /* Dark background */
             color: #e2e8f0; /* Light text color */
-            overflow: hidden; /* Prevent scrolling on the body */
+            overflow: hidden; /* Prevent scrolling on the body by default */
             user-select: none; /* Prevent text selection */
             -webkit-overflow-scrolling: touch; /* Enable smooth scrolling on iOS */
             padding: 0.5rem; /* Reduce padding */
@@ -40,31 +40,88 @@
         canvas:active {
             cursor: grabbing; /* Indicate dragging */
         }
-        .controls-container { /* New container for all controls */
+        .controls-container { /* Main container for all controls */
             display: flex;
-            flex-wrap: wrap; /* Allow wrapping on smaller screens */
-            justify-content: center;
-            gap: 0.75rem; /* Reduce gap */
-            margin-bottom: 0.75rem; /* Reduce margin */
-            padding: 0 0.25rem; /* Reduce padding */
+            flex-direction: column; /* Stack main groups vertically */
+            align-items: center;
+            gap: 0.75rem; /* Gap between main groups */
+            margin-bottom: 0.75rem;
+            padding: 0 0.25rem;
             box-sizing: border-box;
-            width: 100%; /* Ensure it takes full width */
+            width: 100%;
         }
-        .control-group { /* Group for time and zoom controls */
+        .action-buttons-group { /* New group for buttons above settings */
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping */
+            justify-content: center;
+            gap: 0.5rem; /* Gap between buttons */
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            width: 100%; /* Take full width */
+        }
+        .control-group { /* Generic group for inputs/displays (like zoom) */
             display: flex;
             align-items: center;
             gap: 0.3rem; /* Reduce gap */
-            background-color: rgba(0, 0, 0, 0.4);
+            background-color: rgba(0, 0, 0, 0.4); /* Default for zoom/teleport groups */
             padding: 0.3rem 0.6rem; /* Reduce padding */
             border-radius: 0.3rem; /* Reduce border radius */
         }
+        .modifier-group { /* Simulation settings box */
+            display: flex;
+            flex-direction: column; /* Stack items vertically */
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.3rem; /* Further reduced gap within this group */
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 0.3rem 0.5rem; /* Further reduced padding */
+            border-radius: 0.5rem; /* Slightly larger border radius */
+            transition: all 0.3s ease-in-out; /* Smooth transition for showing/hiding */
+            max-height: 500px; /* Max height for transition */
+            overflow: hidden; /* Hide overflow during transition */
+            opacity: 1;
+            transform: translateY(0);
+            width: 100%; /* Take full width */
+        }
+        .modifier-group.hidden {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none; /* Disable interactions when hidden */
+        }
+        .modifier-group .control-group { /* Adjust control groups inside modifier group */
+            background-color: transparent; /* No background for inner groups */
+            padding: 0.1rem 0; /* Smaller padding */
+            justify-content: space-between; /* Distribute label and input */
+            width: 100%; /* Take full width within modifier group */
+        }
+        .modifier-group .control-group label {
+            flex-shrink: 0; /* Prevent label from shrinking */
+            margin-right: 0.5rem; /* Space between label and input */
+        }
+        .modifier-group .control-group input {
+            flex-grow: 1; /* Allow input to grow */
+            max-width: 80px; /* Limit input width */
+        }
+        .modifier-group-title {
+            font-weight: bold;
+            color: #90cdf4; /* Light blue for title */
+            margin-bottom: 0.5rem;
+            text-align: center;
+            width: 100%;
+        }
         button {
-            padding: 0.5rem 1rem; /* Reduce button padding */
+            padding: 0.3rem 0.6rem; /* Even smaller button padding */
             border-radius: 0.3rem; /* Reduce border radius */
             font-weight: 500; /* Slightly thinner font-weight */
             transition: all 0.2s ease-in-out;
             box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.1), 0 1px 3px -1px rgba(0, 0, 0, 0.06); /* Smaller shadow */
-            font-size: 0.8rem; /* Reduce font size */
+            font-size: 0.65rem; /* Even smaller font size */
+            flex-shrink: 0; /* Prevent buttons from stretching */
+            flex-grow: 0; /* Prevent buttons from growing */
         }
         button:hover {
             transform: translateY(-1px); /* Reduce hover lift */
@@ -78,8 +135,8 @@
             background-color: #4299e1; /* Darker blue on hover */
         }
         .btn-secondary { /* For small +/- buttons */
-            padding: 0.15rem 0.5rem; /* Reduce padding */
-            font-size: 0.75rem; /* Reduce font size */
+            padding: 0.1rem 0.3rem; /* Even smaller for secondary buttons */
+            font-size: 0.6rem; /* Even smaller font size */
             border-radius: 0.2rem; /* Reduce border radius */
             background-color: #a0aec0;
             color: #1a202c;
@@ -137,11 +194,11 @@
             background-color: rgba(0, 0, 0, 0.4);
             border: 1px solid #4a5568;
             border-radius: 0.2rem; /* Reduce border radius */
-            padding: 0.3rem 0.5rem; /* Reduce padding */
+            padding: 0.15rem 0.3rem; /* Further reduced padding */
             color: #e2e8f0;
-            width: 80px; /* Reduce width */
+            width: 60px; /* Reduce width */
             text-align: center;
-            font-size: 0.7rem; /* Reduce font size */
+            font-size: 0.65rem; /* Reduce font size */
         }
         .particle-input:focus {
             outline: none;
@@ -165,42 +222,58 @@
                 align-items: center;
                 gap: 0.5rem; /* Further reduce gap */
             }
+            .action-buttons-group {
+                gap: 0.3rem; /* Even smaller gap for action buttons */
+                padding: 0.4rem 0.25rem;
+            }
             .control-group {
                 width: 100%; /* Make zoom controls full width */
                 justify-content: space-around; /* Distribute items evenly */
                 padding: 0.4rem 0.25rem; /* Further reduce padding */
             }
+            .modifier-group {
+                width: 100%;
+                padding: 0.2rem 0.2rem; /* Even smaller padding for modifier group */
+                gap: 0.2rem; /* Even smaller gap */
+            }
+            .modifier-group .control-group {
+                padding: 0.05rem 0; /* Even smaller padding for inner control groups */
+            }
             button {
                 width: auto; /* Allow buttons to size naturally */
-                padding: 0.4rem 0.8rem; /* Further reduce padding */
-                font-size: 0.7rem; /* Further reduce font size */
+                padding: 0.2rem 0.4rem; /* Even smaller padding */
+                font-size: 0.55rem; /* Even smaller font size */
+            }
+            .btn-secondary {
+                padding: 0.05rem 0.15rem; /* Even smaller for secondary buttons */
+                font-size: 0.5rem;
             }
             .global-stats-bar {
-                font-size: 0.65rem; /* Further reduce font size */
-                padding: 0.2rem 0.4rem; /* Further reduce padding */
+                font-size: 0.6rem; /* Further reduce font size */
+                padding: 0.15rem 0.3rem; /* Further reduce padding */
                 gap: 0.2rem; /* Further reduce gap */
             }
             .stats-display {
                 top: 0.25rem; /* Further reduce top margin */
                 right: 0.25rem; /* Further reduce right margin */
-                font-size: 0.6rem; /* Further reduce font size */
-                padding: 0.2rem 0.4rem; /* Further reduce padding */
+                font-size: 0.55rem; /* Further reduce font size */
+                padding: 0.15rem 0.3rem; /* Further reduce padding */
             }
             h1 {
                 font-size: 1.5rem; /* Further reduce heading size */
                 margin-bottom: 0.5rem; /* Further reduce margin */
             }
             p {
-                font-size: 0.65rem; /* Further reduce paragraph size */
+                font-size: 0.6rem; /* Further reduce paragraph size */
             }
             .canvas-container {
                 height: 250px; /* Further reduce canvas container height */
                 margin-bottom: 0.75rem; /* Further reduce margin */
             }
             .particle-input {
-                font-size: 0.6rem; /* Further reduce font size */
-                padding: 0.2rem 0.4rem; /* Further reduce padding */
-                width: 60px; /* Further reduce width */
+                font-size: 0.5rem; /* Even smaller font size */
+                padding: 0.1rem 0.2rem; /* Even smaller padding */
+                width: 45px; /* Even smaller width */
             }
         }
     </style>
@@ -214,28 +287,64 @@
         </div>
 
         <div class="controls-container">
-            <div class="control-group">
-                <span class="text-sm">Zoom:</span>
-                <button id="zoomOutFastBtn" class="btn-secondary">--</button>
-                <button id="zoomOutBtn" class="btn-secondary">-</button>
-                <span id="zoomLevelDisplay" class="text-sm font-bold w-12 text-center">1.0x</span>
-                <button id="zoomInBtn" class="btn-secondary">+</button>
-                <button id="zoomInFastBtn" class="btn-secondary">++</button>
+            <div class="action-buttons-group"> <div class="control-group">
+                    <span class="text-sm">Zoom:</span>
+                    <button id="zoomOutFastBtn" class="btn-secondary">--</button>
+                    <button id="zoomOutBtn" class="btn-secondary">-</button>
+                    <span id="zoomLevelDisplay" class="text-sm font-bold w-12 text-center">1.0x</span>
+                    <button id="zoomInBtn" class="btn-secondary">+</button>
+                    <button id="zoomInFastBtn" class="btn-secondary">++</button>
+                </div>
+
+                <button id="resetSimBtn" class="btn-primary">Reset Simulation</button>
+                <button id="resetViewBtn" class="btn-primary">Reset View</button>
+                <button id="pausePlayBtn" class="btn-primary">Pause</button>
+                <button id="toggleTrackingBtn" class="btn-primary">Toggle Tracking</button>
+                <div class="control-group">
+                    <span class="text-sm">Teleport to random:</span>
+                    <button id="teleportParticleBtn" class="btn-secondary">(P)</button>
+                    <button id="teleportClusterBtn" class="btn-secondary">(C)</button>
+                    <button id="teleportRandomObjectBtn" class="btn-secondary">(R)</button>
+                </div>
+                <button id="toggleScrollLockBtn" class="btn-primary">Lock Scroll</button>
+                <button id="toggleSettingsBtn" class="btn-primary">Hide Settings</button>
             </div>
-            <div class="control-group">
-                <label for="particleCountInput" class="text-sm">Particles:</label>
-                <input type="number" id="particleCountInput" class="particle-input" value="1000" min="100" max="10000">
-            </div>
-            <button id="resetSimBtn" class="btn-primary">Reset Simulation</button>
-            <button id="resetViewBtn" class="btn-primary">Reset View</button>
-            <button id="pausePlayBtn" class="btn-primary">Pause</button>
-            <button id="toggleTrackingBtn" class="btn-primary">Toggle Tracking</button>
-            <div class="control-group">
-                <span class="text-sm">Teleport to random:</span>
-                <button id="teleportParticleBtn" class="btn-secondary">(P)</button>
-                <button id="teleportClusterBtn" class="btn-secondary">(C)</button>
-                <button id="teleportRandomObjectBtn" class="btn-secondary">(R)</button>
-            </div>
+
+            <div id="modifierGroup" class="modifier-group">
+                <div class="modifier-group-title">Simulation Settings</div>
+                <div class="control-group">
+                    <label for="particleCountInput" class="text-sm">Particles:</label>
+                    <input type="number" id="particleCountInput" class="particle-input" value="1000" min="100" max="10000">
+                </div>
+                <div class="control-group">
+                    <label for="minParticleSizeInput" class="text-sm">Min Radius:</label>
+                    <input type="number" id="minParticleSizeInput" class="particle-input" value="1" min="0.1" step="0.1">
+                </div>
+                <div class="control-group">
+                    <label for="maxParticleSizeInput" class="text-sm">Max Radius:</label>
+                    <input type="number" id="maxParticleSizeInput" class="particle-input" value="2.5" min="0.2" step="0.1">
+                </div>
+                <div class="control-group">
+                    <label for="minSpawnDistanceInput" class="text-sm">Min Spawn Distance:</label>
+                    <input type="number" id="minSpawnDistanceInput" class="particle-input" value="250" min="0" step="10">
+                </div>
+                <div class="control-group">
+                    <label for="maxSpawnDistanceInput" class="text-sm">Max Spawn Distance:</label>
+                    <input type="number" id="maxSpawnDistanceInput" class="particle-input" value="600" min="10" step="10">
+                </div>
+                <div class="control-group">
+                    <label for="starMassInput" class="text-sm">Star Mass:</label>
+                    <input type="number" id="starMassInput" class="particle-input" value="5000" min="100" step="100">
+                </div>
+                <div class="control-group">
+                    <label for="gravityConstantInput" class="text-sm">Gravity (G):</label>
+                    <input type="number" id="gravityConstantInput" class="particle-input" value="0.01" min="0.001" step="0.001">
+                </div>
+                <div class="control-group">
+                    <label for="cohesionConstantInput" class="text-sm">Cohesion (C):</label>
+                    <input type="number" id="cohesionConstantInput" class="particle-input" value="50.0" min="0" step="0.1">
+                </div>
+                <button id="resetDefaultsBtn" class="btn-primary mt-2">Reset to Defaults</button> </div>
         </div>
 
         <div id="globalStatsBar" class="global-stats-bar">
@@ -261,7 +370,16 @@
         const pausePlayBtn = document.getElementById('pausePlayBtn');
         const toggleTrackingBtn = document.getElementById('toggleTrackingBtn');
         const statsDisplay = document.getElementById('statsDisplay');
-        const particleCountInput = document.getElementById('particleCountInput'); // New input element
+        const particleCountInput = document.getElementById('particleCountInput');
+
+        // Input elements for adjustable constants
+        const minParticleSizeInput = document.getElementById('minParticleSizeInput');
+        const maxParticleSizeInput = document.getElementById('maxParticleSizeInput');
+        const minSpawnDistanceInput = document.getElementById('minSpawnDistanceInput');
+        const maxSpawnDistanceInput = document.getElementById('maxSpawnDistanceInput');
+        const starMassInput = document.getElementById('starMassInput');
+        const gravityConstantInput = document.getElementById('gravityConstantInput');
+        const cohesionConstantInput = document.getElementById('cohesionConstantInput');
 
         // Teleport buttons
         const teleportParticleBtn = document.getElementById('teleportParticleBtn');
@@ -275,25 +393,43 @@
         const zoomOutFastBtn = document.getElementById('zoomOutFastBtn');
         const zoomLevelDisplay = document.getElementById('zoomLevelDisplay');
 
-
-        // --- Simulation Constants ---
-        const G = 0.01; // Gravitational constant
-        const COHESION_FORCE_G = 50.0; // Base strength of the cohesion force
-        let PARTICLE_COUNT = 1000; // Now a `let` variable to be changed by user input
-        const STAR_RADIUS = 25;
-        const STAR_MASS = 5000; // Increased star mass for stronger gravity
-        const MIN_PARTICLE_RADIUS = 1;
-        const MAX_PARTICLE_RADIUS = 2.5;
-        const PARTICLE_DENSITY = 0.5; // Increased particle density
-        const INITIAL_DISK_INNER_RADIUS = 250; // Particles start farther out
-        const INITIAL_DISK_OUTER_RADIUS = 600; // Particles start farther out
-        const INITIAL_VELOCITY_FACTOR = 1; // Slightly reduced initial velocity
-        const VELOCITY_NOISE = 0.001; // Random noise to initial velocity (kept low for less chaos)
-        const CAMERA_MOVE_SPEED = 5; // Speed at which camera moves with WASD keys
-        const CLUSTER_TOUCH_EPSILON = 0.1; // A small buffer for "touching" to ensure connectivity
+        // Other UI elements
+        const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+        const modifierGroup = document.getElementById('modifierGroup');
+        const toggleScrollLockBtn = document.getElementById('toggleScrollLockBtn');
+        const resetDefaultsBtn = document.getElementById('resetDefaultsBtn'); // New button reference
 
 
-        // Collision and breakup constants
+        // --- Simulation Constants (now 'let' to be adjustable) ---
+        // Store initial default values separately for the reset button
+        const DEFAULT_G = 0.01;
+        const DEFAULT_COHESION_FORCE_G = 50.0;
+        const DEFAULT_PARTICLE_COUNT = 1000;
+        const DEFAULT_STAR_RADIUS = 25; // This is a constant, not an input
+        const DEFAULT_STAR_MASS = 5000;
+        const DEFAULT_MIN_PARTICLE_RADIUS = 1;
+        const DEFAULT_MAX_PARTICLE_RADIUS = 2.5;
+        const DEFAULT_INITIAL_DISK_INNER_RADIUS = 250;
+        const DEFAULT_INITIAL_DISK_OUTER_RADIUS = 600;
+
+        let G = DEFAULT_G; // Gravitational constant
+        let COHESION_FORCE_G = DEFAULT_COHESION_FORCE_G; // Base strength of the cohesion force (now adjustable)
+        let PARTICLE_COUNT = DEFAULT_PARTICLE_COUNT; // Now a `let` variable to be changed by user input
+        const STAR_RADIUS = DEFAULT_STAR_RADIUS; // Unchanged
+        let STAR_MASS = DEFAULT_STAR_MASS; // Increased star mass for stronger gravity
+        let MIN_PARTICLE_RADIUS = DEFAULT_MIN_PARTICLE_RADIUS; // This will now be controlled by minParticleSizeInput
+        let MAX_PARTICLE_RADIUS = DEFAULT_MAX_PARTICLE_RADIUS; // This will now be controlled by maxParticleSizeInput
+        let INITIAL_DISK_INNER_RADIUS = DEFAULT_INITIAL_DISK_INNER_RADIUS; // This will now be controlled by minSpawnDistanceInput
+        let INITIAL_DISK_OUTER_RADIUS = DEFAULT_INITIAL_DISK_OUTER_RADIUS; // This will now be controlled by maxSpawnDistanceInput
+
+        const PARTICLE_DENSITY = 0.5; // Increased particle density (unchanged)
+        const INITIAL_VELOCITY_FACTOR = 1; // Slightly reduced initial velocity (unchanged)
+        const VELOCITY_NOISE = 0.001; // Random noise to initial velocity (kept low for less chaos) (unchanged)
+        const CAMERA_MOVE_SPEED = 5; // Speed at which camera moves with WASD keys (unchanged)
+        const CLUSTER_TOUCH_EPSILON = 0.1; // A small buffer for "touching" to ensure connectivity (unchanged)
+
+
+        // Collision and breakup constants (unchanged)
         const COLLISION_DAMPENING = 0; // How much velocity is kept on collision (1=elastic, 0=inelastic/stick)
         const BREAKUP_THRESHOLD_VELOCITY_SQ = 1000; // Squared relative velocity to trigger a breakup (tune this)
         const EXPLOSION_IMPULSE_STRENGTH = 1; // Outward impulse given during breakup (tune this)
@@ -302,23 +438,23 @@
         // --- Simulation Variables ---
         let particles = []; // Array to hold all active particles (star + smaller bodies)
         let simulationTime = 0; // Tracks frames passed
-        const simulationSpeed = 1.0; // Simulation speed is now constant
-        let zoomLevel = 1.0; // Current zoom level (1.0 is normal)
-        let cameraWorldX = 0; // World X coordinate that the camera is centered on
-        let cameraWorldY = 0; // World Y coordinate that the camera is centered on
-        const keys = {}; // Object to track pressed keys for camera movement
+        const simulationSpeed = 1.0; // Simulation speed is now constant (unchanged)
+        let zoomLevel = 1.0; // Current zoom level (1.0 is normal) (unchanged)
+        let cameraWorldX = 0; // World X coordinate that the camera is centered on (unchanged)
+        let cameraWorldY = 0; // World Y coordinate that the camera is centered on (unchanged)
+        const keys = {}; // Object to track pressed keys for camera movement (unchanged)
 
-        let isDragging = false; // Flag to track mouse dragging
-        let lastMouseX = 0;     // Last mouse X position for dragging
-        let lastMouseY = 0;     // Last mouse Y position for dragging
-        let isPaused = false;   // Simulation pause state
+        let isDragging = false; // Flag to track mouse dragging (unchanged)
+        let lastMouseX = 0;     // Last mouse X position for dragging (unchanged)
+        let lastMouseY = 0;     // Last mouse Y position for dragging (unchanged)
+        let isPaused = false;   // Simulation pause state (unchanged)
 
-        let isTracking = false;   // Flag for camera tracking
-        let trackedParticle = null; // Particle object to track
-        let trackingOffsetX = 0; // Offset for WASD movement relative to tracked object
-        let trackingOffsetY = 0; // Offset for WASD movement relative to tracked object
+        let isTracking = false;   // Flag for camera tracking (unchanged)
+        let trackedParticle = null; // Particle object to track (unchanged)
+        let trackingOffsetX = 0; // Offset for WASD movement relative to tracked object (unchanged)
+        let trackingOffsetY = 0; // Offset for WASD movement relative to tracked object (unchanged)
 
-        // Global variables for cluster naming
+        // Global variables for cluster naming (unchanged)
         let clusterNameMap = new Map(); // Map<string (sorted particle names), string (C# name)>
         let nextClusterId = 1; // Counter for cluster IDs
 
@@ -526,13 +662,57 @@
             // Get particle count from input, validate, and set PARTICLE_COUNT
             const desiredParticleCount = parseInt(particleCountInput.value, 10);
             if (isNaN(desiredParticleCount) || desiredParticleCount < 100 || desiredParticleCount > 10000) {
-                // Show a message or revert to default if input is invalid
-                // Using a simple alert for now, consider a custom modal for better UX
                 alert('Please enter a number between 100 and 10,000 for particle count.');
-                particleCountInput.value = 1000; // Reset to default
-                PARTICLE_COUNT = 1000;
+                particleCountInput.value = DEFAULT_PARTICLE_COUNT;
+                PARTICLE_COUNT = DEFAULT_PARTICLE_COUNT;
             } else {
                 PARTICLE_COUNT = desiredParticleCount;
+            }
+
+            // Update constants from input fields
+            MIN_PARTICLE_RADIUS = parseFloat(minParticleSizeInput.value);
+            MAX_PARTICLE_RADIUS = parseFloat(maxParticleSizeInput.value);
+            INITIAL_DISK_INNER_RADIUS = parseFloat(minSpawnDistanceInput.value);
+            INITIAL_DISK_OUTER_RADIUS = parseFloat(maxSpawnDistanceInput.value);
+            STAR_MASS = parseFloat(starMassInput.value);
+            G = parseFloat(gravityConstantInput.value);
+            COHESION_FORCE_G = parseFloat(cohesionConstantInput.value);
+
+            // Basic validation for inputs
+            if (isNaN(MIN_PARTICLE_RADIUS) || MIN_PARTICLE_RADIUS <= 0) {
+                alert('Min Radius must be a positive number.');
+                minParticleSizeInput.value = DEFAULT_MIN_PARTICLE_RADIUS;
+                MIN_PARTICLE_RADIUS = DEFAULT_MIN_PARTICLE_RADIUS;
+            }
+            if (isNaN(MAX_PARTICLE_RADIUS) || MAX_PARTICLE_RADIUS <= MIN_PARTICLE_RADIUS) {
+                alert('Max Radius must be a number greater than Min Radius.');
+                maxParticleSizeInput.value = DEFAULT_MAX_PARTICLE_RADIUS;
+                MAX_PARTICLE_RADIUS = DEFAULT_MAX_PARTICLE_RADIUS;
+            }
+            if (isNaN(INITIAL_DISK_INNER_RADIUS) || INITIAL_DISK_INNER_RADIUS < 0) {
+                alert('Min Spawn Distance must be a non-negative number.');
+                minSpawnDistanceInput.value = DEFAULT_INITIAL_DISK_INNER_RADIUS;
+                INITIAL_DISK_INNER_RADIUS = DEFAULT_INITIAL_DISK_INNER_RADIUS;
+            }
+            if (isNaN(INITIAL_DISK_OUTER_RADIUS) || INITIAL_DISK_OUTER_RADIUS <= INITIAL_DISK_INNER_RADIUS) {
+                alert('Max Spawn Distance must be a number greater than Min Spawn Distance.');
+                maxSpawnDistanceInput.value = DEFAULT_INITIAL_DISK_OUTER_RADIUS;
+                INITIAL_DISK_OUTER_RADIUS = DEFAULT_INITIAL_DISK_OUTER_RADIUS;
+            }
+            if (isNaN(STAR_MASS) || STAR_MASS <= 0) {
+                alert('Star Mass must be a positive number.');
+                starMassInput.value = DEFAULT_STAR_MASS;
+                STAR_MASS = DEFAULT_STAR_MASS;
+            }
+            if (isNaN(G)) {
+                alert('Gravity Constant (G) must be a number.');
+                gravityConstantInput.value = DEFAULT_G;
+                G = DEFAULT_G;
+            }
+            if (isNaN(COHESION_FORCE_G)) {
+                alert('Cohesion Constant (C) must be a number.');
+                cohesionConstantInput.value = DEFAULT_COHESION_FORCE_G;
+                COHESION_FORCE_G = DEFAULT_COHESION_FORCE_G;
             }
 
 
@@ -567,7 +747,7 @@
 
             // Create orbiting particles with random distribution within the disk, relative to (0,0)
             for (let i = 0; i < PARTICLE_COUNT; i++) { // Use the dynamic PARTICLE_COUNT
-                // Random distance within the inner and outer disk radii
+                // Random distance within the inner and outer disk radii (spawn distance)
                 const dist = INITIAL_DISK_INNER_RADIUS + Math.random() * (INITIAL_DISK_OUTER_RADIUS - INITIAL_DISK_INNER_RADIUS);
                 // Random angle for full circular distribution
                 const angle = Math.random() * Math.PI * 2;
@@ -1249,6 +1429,44 @@
         teleportClusterBtn.addEventListener('click', teleportToRandomCluster);
         teleportRandomObjectBtn.addEventListener('click', teleportToRandomObject);
 
+        // Event listener for toggle settings button
+        toggleSettingsBtn.addEventListener('click', () => {
+            modifierGroup.classList.toggle('hidden');
+            if (modifierGroup.classList.contains('hidden')) {
+                toggleSettingsBtn.textContent = 'Show Settings';
+            } else {
+                toggleSettingsBtn.textContent = 'Hide Settings';
+            }
+        });
+
+        // Event listener for toggle scroll lock button
+        let isScrollLocked = true; // Default to locked
+        toggleScrollLockBtn.addEventListener('click', () => {
+            isScrollLocked = !isScrollLocked;
+            if (isScrollLocked) {
+                document.body.style.overflow = 'hidden';
+                toggleScrollLockBtn.textContent = 'Unlock Scroll';
+            } else {
+                document.body.style.overflow = 'auto';
+                toggleScrollLockBtn.textContent = 'Lock Scroll';
+            }
+        });
+
+        // New: Event listener for Reset to Defaults button
+        resetDefaultsBtn.addEventListener('click', () => {
+            particleCountInput.value = DEFAULT_PARTICLE_COUNT;
+            minParticleSizeInput.value = DEFAULT_MIN_PARTICLE_RADIUS;
+            maxParticleSizeInput.value = DEFAULT_MAX_PARTICLE_RADIUS;
+            minSpawnDistanceInput.value = DEFAULT_INITIAL_DISK_INNER_RADIUS;
+            maxSpawnDistanceInput.value = DEFAULT_INITIAL_DISK_OUTER_RADIUS;
+            starMassInput.value = DEFAULT_STAR_MASS;
+            gravityConstantInput.value = DEFAULT_G;
+            cohesionConstantInput.value = DEFAULT_COHESION_FORCE_G;
+            // No need to call initSimulation here, as the user might want to adjust
+            // settings further before restarting the simulation.
+            // They can click "Reset Simulation" separately.
+        });
+
 
         // Event listener for clicking on a particle to track it
         canvas.addEventListener('click', (event) => {
@@ -1458,7 +1676,7 @@
                 const currentY = event.touches[0].clientY;
 
                 const dx = currentX - lastMouseX;
-                const dy = currentY - lastMouseY;
+                const dy = currentY - lastY;
 
                 cameraWorldX -= dx / zoomLevel;
                 cameraWorldY -= dy / zoomLevel;
@@ -1522,7 +1740,17 @@
         // Initial setup on window load
         window.onload = function() {
             resizeCanvas(); // Set initial canvas size and populate the simulation
-            initSimulation(); // Initialize the simulation
+
+            // Set initial values for the new input fields
+            minParticleSizeInput.value = MIN_PARTICLE_RADIUS;
+            maxParticleSizeInput.value = MAX_PARTICLE_RADIUS;
+            minSpawnDistanceInput.value = INITIAL_DISK_INNER_RADIUS;
+            maxSpawnDistanceInput.value = INITIAL_DISK_OUTER_RADIUS;
+            starMassInput.value = STAR_MASS;
+            gravityConstantInput.value = G;
+            cohesionConstantInput.value = COHESION_FORCE_G;
+
+            initSimulation(); // Initialize the simulation with default/current input values
             animate(); // Start the animation loop
         };
 
