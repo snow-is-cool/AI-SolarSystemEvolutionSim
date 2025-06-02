@@ -87,17 +87,26 @@
         .btn-secondary:hover {
             background-color: #718096;
         }
-        .info-panel { /* General style for information displays */
+        .global-stats-bar { /* Style for the integrated global stats bar */
             background-color: rgba(0, 0, 0, 0.4);
             padding: 0.5rem 1rem;
             border-radius: 0.5rem;
-            font-size: 0.8rem; /* Adjust font size for better mobile readability */
+            font-size: 0.8rem;
             color: #cbd5e0;
-            text-align: center; /* Center the info display text */
-            width: 100%; /* Ensure it takes full width */
+            text-align: center;
+            width: 100%;
             box-sizing: border-box;
+            margin-bottom: 1rem; /* Space below this bar */
+            display: flex; /* Use flexbox for alignment */
+            justify-content: space-around; /* Distribute items evenly */
+            align-items: center;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            gap: 0.5rem; /* Space between stat items */
         }
-        .stats-display { /* Specific style for the dynamic stats panel */
+        .global-stats-bar span {
+            white-space: nowrap; /* Prevent text from wrapping within a stat item */
+        }
+        .stats-display { /* Specific style for the dynamic stats panel on canvas */
             position: absolute; /* Position relative to the canvas-container */
             top: 1rem;
             right: 1rem;
@@ -123,6 +132,20 @@
             align-items: center;
             padding: 1rem; /* Add padding to the main content area */
             box-sizing: border-box;
+        }
+        .particle-input {
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px solid #4a5568;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            color: #e2e8f0;
+            width: 100px; /* Fixed width for the input box */
+            text-align: center;
+        }
+        .particle-input:focus {
+            outline: none;
+            border-color: #63b3ed;
+            box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.5);
         }
 
         /* Mobile-specific adjustments */
@@ -151,8 +174,8 @@
                 padding: 0.6rem 1.2rem; /* Adjust padding */
                 font-size: 0.85rem;
             }
-            .info-panel { /* Adjusted for mobile */
-                font-size: 0.75rem; /* Smaller font for stats on mobile */
+            .global-stats-bar {
+                font-size: 0.75rem; /* Smaller font for global stats on mobile */
                 padding: 0.4rem 0.8rem;
             }
             .stats-display {
@@ -174,8 +197,10 @@
 <body>
     <div class="main-content-wrapper p-6 bg-gray-800 rounded-xl shadow-lg mx-auto my-8">
         <h1 class="text-3xl font-bold mb-6 text-blue-300">2D Solar System Evolution</h1>
-        <div class="canvas-container"> <canvas id="solarSystemCanvas"></canvas>
-            <div id="statsDisplay" class="stats-display hidden"></div> </div>
+        <div class="canvas-container">
+            <canvas id="solarSystemCanvas"></canvas>
+            <div id="statsDisplay" class="stats-display hidden"></div>
+        </div>
 
         <div class="controls-container">
             <div class="control-group">
@@ -186,14 +211,28 @@
                 <button id="zoomInBtn" class="btn-secondary">+</button>
                 <button id="zoomInFastBtn" class="btn-secondary">++</button>
             </div>
+            <div class="control-group">
+                <label for="particleCountInput" class="text-sm">Particles:</label>
+                <input type="number" id="particleCountInput" class="particle-input" value="1000" min="100" max="10000">
+            </div>
             <button id="resetSimBtn" class="btn-primary">Reset Simulation</button>
             <button id="resetViewBtn" class="btn-primary">Reset View</button>
             <button id="pausePlayBtn" class="btn-primary">Pause</button>
             <button id="toggleTrackingBtn" class="btn-primary">Toggle Tracking</button>
+            <div class="control-group">
+                <span class="text-sm">Teleport to random:</span>
+                <button id="teleportParticleBtn" class="btn-secondary">(P)</button>
+                <button id="teleportClusterBtn" class="btn-secondary">(C)</button>
+                <button id="teleportRandomObjectBtn" class="btn-secondary">(R)</button>
+            </div>
         </div>
 
-        <div id="simTimeContainer" class="info-panel"> Simulation Time: <span id="simTimeDisplay">0</span> frames
+        <div id="globalStatsBar" class="global-stats-bar">
+            <span>Simulation Time: <span id="simTimeDisplay">0</span> frames</span>
+            <span>Total Particles: <span id="totalParticlesDisplay">0</span></span>
+            <span>Total Clusters: <span id="totalClustersDisplay">0</span></span>
         </div>
+
         <p class="mt-4 text-sm text-gray-400 text-center">
             Watch as small particles orbit a central star and collide, simulating gravitational interactions.
         </p>
@@ -206,9 +245,17 @@
         const resetSimBtn = document.getElementById('resetSimBtn');
         const resetViewBtn = document.getElementById('resetViewBtn');
         const simTimeDisplay = document.getElementById('simTimeDisplay');
+        const totalParticlesDisplay = document.getElementById('totalParticlesDisplay');
+        const totalClustersDisplay = document.getElementById('totalClustersDisplay');
         const pausePlayBtn = document.getElementById('pausePlayBtn');
         const toggleTrackingBtn = document.getElementById('toggleTrackingBtn');
-        const statsDisplay = document.getElementById('statsDisplay'); // Get reference to the stats div
+        const statsDisplay = document.getElementById('statsDisplay');
+        const particleCountInput = document.getElementById('particleCountInput'); // New input element
+
+        // Teleport buttons
+        const teleportParticleBtn = document.getElementById('teleportParticleBtn');
+        const teleportClusterBtn = document.getElementById('teleportClusterBtn');
+        const teleportRandomObjectBtn = document.getElementById('teleportRandomObjectBtn');
 
         // Zoom control buttons
         const zoomInBtn = document.getElementById('zoomInBtn');
@@ -221,7 +268,7 @@
         // --- Simulation Constants ---
         const G = 0.01; // Gravitational constant
         const COHESION_FORCE_G = 50.0; // Base strength of the cohesion force
-        const PARTICLE_COUNT = 1000; // Number of initial small particles
+        let PARTICLE_COUNT = 1000; // Now a `let` variable to be changed by user input
         const STAR_RADIUS = 25;
         const STAR_MASS = 5000; // Increased star mass for stronger gravity
         const MIN_PARTICLE_RADIUS = 1;
@@ -241,7 +288,6 @@
         const EXPLOSION_IMPULSE_STRENGTH = 1; // Outward impulse given during breakup (tune this)
         const EXPLOSION_RADIUS_SQ = 6; // Squared radius for particles affected by explosion (tune this)
 
-
         // --- Simulation Variables ---
         let particles = []; // Array to hold all active particles (star + smaller bodies)
         let simulationTime = 0; // Tracks frames passed
@@ -256,10 +302,14 @@
         let lastMouseY = 0;     // Last mouse Y position for dragging
         let isPaused = false;   // Simulation pause state
 
-        let isTracking = false;   // New: Flag for camera tracking
-        let trackedParticle = null; // New: Particle object to track
-        let trackingOffsetX = 0; // New: Offset for WASD movement relative to tracked object
-        let trackingOffsetY = 0; // New: Offset for WASD movement relative to tracked object
+        let isTracking = false;   // Flag for camera tracking
+        let trackedParticle = null; // Particle object to track
+        let trackingOffsetX = 0; // Offset for WASD movement relative to tracked object
+        let trackingOffsetY = 0; // Offset for WASD movement relative to tracked object
+
+        // Global variables for cluster naming
+        let clusterNameMap = new Map(); // Map<string (sorted particle names), string (C# name)>
+        let nextClusterId = 1; // Counter for cluster IDs
 
 
         // --- Helper Functions ---
@@ -311,10 +361,76 @@
             return Array.from(cluster); // Convert the Set to an Array and return
         }
 
+        /**
+         * Counts the total number of particles (excluding the sun) and identifies distinct clusters (groups of 2 or more non-star particles).
+         * This function now also triggers cluster naming.
+         * @returns {{totalParticles: number, clusters: Array<Array<Particle>>}} An object containing the counts and the list of clusters.
+         */
+        function countGlobalStats() {
+            const nonStarParticles = particles.filter(p => p.isAlive && !p.isStar);
+            const totalParticles = nonStarParticles.length;
+
+            const visited = new Set();
+            const allClusters = []; // Array to store actual cluster arrays
+
+            for (const startParticle of nonStarParticles) {
+                if (!visited.has(startParticle)) {
+                    const currentCluster = new Set();
+                    const queue = [startParticle];
+                    visited.add(startParticle);
+                    currentCluster.add(startParticle);
+
+                    while (queue.length > 0) {
+                        const currentP = queue.shift();
+
+                        for (const otherP of nonStarParticles) {
+                            if (otherP !== currentP && !visited.has(otherP)) {
+                                const requiredDistance = currentP.radius + otherP.radius;
+                                if (distance(currentP, otherP) <= requiredDistance + CLUSTER_TOUCH_EPSILON) {
+                                    visited.add(otherP);
+                                    currentCluster.add(otherP);
+                                    queue.push(otherP);
+                                }
+                            }
+                        }
+                    }
+                    // If the cluster has more than one particle, count it and add to allClusters
+                    if (currentCluster.size > 1) {
+                        const clusterArray = Array.from(currentCluster);
+                        getClusterName(clusterArray); // Ensure this cluster gets a name
+                        allClusters.push(clusterArray);
+                    }
+                }
+            }
+            return { totalParticles, totalClusters: allClusters.length, clusters: allClusters };
+        }
+
+        /**
+         * Generates or retrieves a stable decimal name for a cluster.
+         * @param {Array<Particle>} clusterParticles An array of particles forming the cluster.
+         * @returns {string | null} The cluster name (e.g., "C1", "C2") or null if not a valid cluster.
+         */
+        function getClusterName(clusterParticles) {
+            if (clusterParticles.length <= 1) return null; // Only name actual clusters
+
+            // Create a stable key for the cluster based on sorted particle names
+            const particleNames = clusterParticles.map(p => p.name).sort();
+            const clusterKey = particleNames.join('-');
+
+            if (clusterNameMap.has(clusterKey)) {
+                return clusterNameMap.get(clusterKey);
+            } else {
+                const newClusterName = 'C' + nextClusterId; // Use decimal for clusters
+                clusterNameMap.set(clusterKey, newClusterName);
+                nextClusterId++;
+                return newClusterName;
+            }
+        }
+
 
         // --- Particle Class Definition ---
         class Particle {
-            constructor(x, y, vx, vy, radius, color, isStar = false) {
+            constructor(x, y, vx, vy, radius, color, isStar = false, name = '') { // Added name parameter
                 this.x = x;
                 this.y = y;
                 this.vx = vx; // velocity x
@@ -325,6 +441,7 @@
                 this.color = color;
                 this.isStar = isStar;
                 this.isAlive = true; // Flag for removal from active physics
+                this.name = name; // Assign the name
             }
 
             // Update particle's position
@@ -345,7 +462,7 @@
                 // Removed boundary check/wrap-around. Particles can now go off-screen.
             }
 
-            // Draw the particle
+            // Draw the particle on the canvas
             draw() {
                 if (!this.isAlive) return; // Only draw active particles
 
@@ -376,7 +493,7 @@
             cameraWorldX = 0; // Center camera on world (0,0)
             cameraWorldY = 0; // Center camera on world (0,0)
             toggleTrackingBtn.textContent = 'Toggle Tracking'; // Reset button text
-            statsDisplay.classList.add('hidden'); // Hide stats on reset
+            statsDisplay.classList.add('hidden'); // Hide dynamic stats on reset
         }
 
         // Resets only the view (camera position and zoom) without affecting the simulation
@@ -390,11 +507,23 @@
             trackingOffsetX = 0;
             trackingOffsetY = 0;
             toggleTrackingBtn.textContent = 'Toggle Tracking';
-            statsDisplay.classList.add('hidden'); // Hide stats on view reset
+            statsDisplay.classList.add('hidden'); // Hide dynamic stats on view reset
         }
 
         // Initializes the simulation with a star and orbiting particles
         function initSimulation() {
+            // Get particle count from input, validate, and set PARTICLE_COUNT
+            const desiredParticleCount = parseInt(particleCountInput.value, 10);
+            if (isNaN(desiredParticleCount) || desiredParticleCount < 100 || desiredParticleCount > 10000) {
+                // Show a message or revert to default if input is invalid
+                alert('Please enter a number between 100 and 10,000 for particle count.');
+                particleCountInput.value = 1000; // Reset to default
+                PARTICLE_COUNT = 1000;
+            } else {
+                PARTICLE_COUNT = desiredParticleCount;
+            }
+
+
             particles = []; // Clear existing particles
             simulationTime = 0;
             simTimeDisplay.textContent = simulationTime;
@@ -403,6 +532,9 @@
             isPaused = false; // Reset pause state
             pausePlayBtn.textContent = 'Pause'; // Update button text
 
+            clusterNameMap = new Map(); // Clear cluster names on new simulation
+            nextClusterId = 1; // Reset cluster ID counter
+
             // Create the central star at world (0,0)
             const star = new Particle(
                 0, // X-coordinate
@@ -410,7 +542,8 @@
                 0, 0, // Star is stationary
                 STAR_RADIUS,
                 '#FFFF00', // Yellow color for the star
-                true // Mark as star
+                true, // Mark as star
+                "S1" // Name the star
             );
             // Explicitly set the star's mass after creation, overriding the default calculation
             star.mass = STAR_MASS;
@@ -421,7 +554,7 @@
             const orangeBluePalette = ['#FFA500', '#0000FF']; // Orange and Blue
 
             // Create orbiting particles with random distribution within the disk, relative to (0,0)
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
+            for (let i = 0; i < PARTICLE_COUNT; i++) { // Use the dynamic PARTICLE_COUNT
                 // Random distance within the inner and outer disk radii
                 const dist = INITIAL_DISK_INNER_RADIUS + Math.random() * (INITIAL_DISK_OUTER_RADIUS - INITIAL_DISK_INNER_RADIUS);
                 // Random angle for full circular distribution
@@ -468,7 +601,9 @@
                     color = redGreyPalette[Math.floor(Math.random() * redGreyPalette.length)];
                 }
 
-                particles.push(new Particle(x, y, vx_orbital + vx_noise, vy_orbital + vy_noise, radius, color));
+                // Assign decimal name: P1, P2, ..., P(PARTICLE_COUNT)
+                const particleName = 'P' + (i + 1);
+                particles.push(new Particle(x, y, vx_orbital + vx_noise, vy_orbital + vy_noise, radius, color, false, particleName));
             }
         }
 
@@ -633,29 +768,196 @@
 
         /**
          * Updates the content of the stats display HTML element.
-         * @param {number} clusterWorldX - The world X coordinate of the cluster's center.
-         * @param {number} clusterWorldY - The world Y coordinate of the cluster's center.
-         * @param {number} speed - The estimated speed of the cluster.
-         * @param {number} rotation - The estimated rotation speed of the cluster in degrees per frame.
-         * @param {number} mass - The total mass of the cluster.
-         * @param {number} vx - The x-component of the cluster's velocity.
-         * @param {number} vy - The y-component of the cluster's velocity.
-         * @param {number} circularity - The estimated circularity of the cluster (0-1).
+         * @param {number} objectX - The world X coordinate of the object's center.
+         * @param {number} objectY - The world Y coordinate of the object's center.
+         * @param {number} speed - The estimated speed of the object.
+         * @param {number} rotation - The estimated rotation speed of the object in degrees per frame.
+         * @param {number} mass - The total mass of the object.
+         * @param {number} vx - The x-component of the object's velocity.
+         * @param {number} vy - The y-component of the object's velocity.
+         * @param {number} circularity - The estimated circularity of the object (0-1).
+         * @param {string} objectName - The name of the tracked object (e.g., "S1", "P123", "C1").
          */
-        function updateStatsDisplay(clusterWorldX, clusterWorldY, speed, rotation, mass, vx, vy, circularity) {
+        function updateStatsDisplay(objectX, objectY, speed, rotation, mass, vx, vy, circularity, objectName) {
+            const circularityPercentage = (circularity * 100).toFixed(2); // Convert to percentage
+            let statsHeading = "";
+
+            if (objectName === "S1") {
+                statsHeading = "STAR STATS:";
+            } else if (objectName.startsWith("P")) {
+                statsHeading = "PARTICLE STATS:";
+            } else if (objectName.startsWith("C")) {
+                statsHeading = "CLUSTER STATS:";
+            } else {
+                statsHeading = "OBJECT STATS:"; // Fallback
+            }
+
             const statsContent = `
                 <div>
-                    <span style="font-weight: bold;">STATS:</span><br>
-                    Pos: (${clusterWorldX.toFixed(0)}, ${clusterWorldY.toFixed(0)})<br>
+                    <span style="font-weight: bold;">${statsHeading}</span><br>
+                    Name: ${objectName}<br>
+                    Pos: (${objectX.toFixed(0)}, ${objectY.toFixed(0)})<br>
                     Vx: ${vx.toFixed(2)} Vy: ${vy.toFixed(2)}<br>
-                    Average Speed: ${speed.toFixed(2)}<br>
-                    Mass: ${mass.toFixed(2)}<br>
+                    Speed: ${speed.toFixed(2)}<br>
+                    Mass: ${mass.toFixed(2)}U<br>
                     Rotation Speed: ${rotation.toFixed(2)}°/frame<br>
-                    Circularity: ${circularity.toFixed(4)}
+                    Circularity: ${circularityPercentage}%
                 </div>
             `;
             statsDisplay.innerHTML = statsContent;
         }
+
+        /**
+         * Teleports the camera to a random individual non-star particle (not part of a cluster).
+         */
+        function teleportToRandomParticle() {
+            const nonStarParticles = particles.filter(p => p.isAlive && !p.isStar);
+            const singleParticles = nonStarParticles.filter(p => findCluster(p).length === 1); // Find particles that are not part of a cluster
+            
+            if (singleParticles.length > 0) {
+                const randomIndex = Math.floor(Math.random() * singleParticles.length);
+                trackedParticle = singleParticles[randomIndex];
+                isTracking = true;
+                toggleTrackingBtn.textContent = 'Tracking ON';
+                statsDisplay.classList.remove('hidden');
+
+                cameraWorldX = trackedParticle.x;
+                cameraWorldY = trackedParticle.y;
+                trackingOffsetX = 0;
+                trackingOffsetY = 0;
+            } else {
+                // If no single particles, try a random non-star particle as fallback, or turn off tracking
+                if (nonStarParticles.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * nonStarParticles.length);
+                    trackedParticle = nonStarParticles[randomIndex];
+                    isTracking = true;
+                    toggleTrackingBtn.textContent = 'Tracking ON';
+                    statsDisplay.classList.remove('hidden');
+
+                    cameraWorldX = trackedParticle.x;
+                    cameraWorldY = trackedParticle.y;
+                    trackingOffsetX = 0;
+                    trackingOffsetY = 0;
+                } else {
+                    isTracking = false;
+                    trackedParticle = null;
+                    toggleTrackingBtn.textContent = 'Toggle Tracking';
+                    statsDisplay.classList.add('hidden');
+                    cameraWorldX = 0;
+                    cameraWorldY = 0;
+                }
+            }
+        }
+
+        /**
+         * Teleports the camera to the center of a random cluster (2 or more non-star particles).
+         */
+        function teleportToRandomCluster() {
+            const { clusters } = countGlobalStats(); // Get the actual list of clusters
+            if (clusters.length > 0) {
+                const randomIndex = Math.floor(Math.random() * clusters.length);
+                const randomCluster = clusters[randomIndex];
+
+                // Calculate center of mass for the chosen cluster
+                let sumX = 0;
+                let sumY = 0;
+                let totalMass = 0;
+                for (const p of randomCluster) {
+                    sumX += p.x * p.mass;
+                    sumY += p.y * p.mass;
+                    totalMass += p.mass;
+                }
+                const clusterCenterX = sumX / totalMass;
+                const clusterCenterY = sumY / totalMass;
+
+                // Set tracking to the first particle of this cluster (or any particle in it)
+                // findCluster will then correctly identify the whole cluster for stats.
+                trackedParticle = randomCluster[0];
+                isTracking = true;
+                toggleTrackingBtn.textContent = 'Tracking ON';
+                statsDisplay.classList.remove('hidden');
+
+                // Center camera on the cluster's center of mass
+                cameraWorldX = clusterCenterX;
+                cameraWorldY = clusterCenterY;
+                trackingOffsetX = 0;
+                trackingOffsetY = 0;
+            } else {
+                // If no clusters, turn off tracking
+                isTracking = false;
+                trackedParticle = null;
+                toggleTrackingBtn.textContent = 'Toggle Tracking';
+                statsDisplay.classList.add('hidden');
+                cameraWorldX = 0; // Reset camera to origin
+                cameraWorldY = 0;
+            }
+        }
+
+        /**
+         * Teleports the camera to a random active object (Star, individual particle, or cluster).
+         */
+        function teleportToRandomObject() {
+            const star = particles.find(p => p.isStar);
+            const nonStarParticles = particles.filter(p => p.isAlive && !p.isStar);
+            const { clusters } = countGlobalStats();
+
+            const trackableObjects = [];
+            if (star && star.isAlive) {
+                trackableObjects.push(star);
+            }
+            // Add individual non-clustered particles
+            nonStarParticles.forEach(p => {
+                if (findCluster(p).length === 1) { // Only add if it's a single particle, not part of a larger cluster
+                    trackableObjects.push(p);
+                }
+            });
+            // Add one representative particle from each cluster
+            clusters.forEach(cluster => {
+                if (cluster.length > 0) {
+                    trackableObjects.push(cluster[0]); // Use the first particle as a representative for the cluster
+                }
+            });
+
+            if (trackableObjects.length > 0) {
+                const randomIndex = Math.floor(Math.random() * trackableObjects.length);
+                trackedParticle = trackableObjects[randomIndex];
+                isTracking = true;
+                toggleTrackingBtn.textContent = 'Tracking ON';
+                statsDisplay.classList.remove('hidden');
+
+                // Center camera on the selected object/cluster's center of mass
+                let targetX = trackedParticle.x;
+                let targetY = trackedParticle.y;
+
+                if (!trackedParticle.isStar && findCluster(trackedParticle).length > 1) {
+                    // If it's a cluster, calculate its center of mass
+                    const cluster = findCluster(trackedParticle);
+                    let sumX = 0;
+                    let sumY = 0;
+                    let totalMass = 0;
+                    for (const p of cluster) {
+                        sumX += p.x * p.mass;
+                        sumY += p.y * p.mass;
+                        totalMass += p.mass;
+                    }
+                    targetX = sumX / totalMass;
+                    targetY = sumY / totalMass;
+                }
+
+                cameraWorldX = targetX;
+                cameraWorldY = targetY;
+                trackingOffsetX = 0;
+                trackingOffsetY = 0;
+            } else {
+                isTracking = false;
+                trackedParticle = null;
+                toggleTrackingBtn.textContent = 'Toggle Tracking';
+                statsDisplay.classList.add('hidden');
+                cameraWorldX = 0;
+                cameraWorldY = 0;
+            }
+        }
+
 
         // Main animation loop
         function animate() {
@@ -663,104 +965,154 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
 
+            // Update global stats bar
+            const { totalParticles, totalClusters } = countGlobalStats(); // This call now also names clusters
+            totalParticlesDisplay.textContent = totalParticles;
+            totalClustersDisplay.textContent = totalClusters;
+
             // Calculate cluster stats if tracking is active, regardless of pause state
             if (isTracking && trackedParticle) {
+                // First, check if the tracked particle itself is still alive.
+                if (!trackedParticle.isAlive) {
+                    isTracking = false;
+                    trackedParticle = null;
+                    toggleTrackingBtn.textContent = 'Toggle Tracking';
+                    statsDisplay.classList.add('hidden');
+                    cameraWorldX = 0; // Recenter camera if tracking stops
+                    cameraWorldY = 0;
+                    return; // Stop processing tracking for this frame if particle is dead
+                }
+
                 statsDisplay.classList.remove('hidden'); // Show stats panel
 
-                const currentCluster = findCluster(trackedParticle);
+                let displayObjectName = "";
+                let displayObjectX = 0;
+                let displayObjectY = 0;
+                let displayObjectVx = 0;
+                let displayObjectVy = 0;
+                let displayObjectSpeed = 0;
+                let displayObjectRotation = 0;
+                let displayObjectMass = 0;
+                let displayObjectCircularity = 1.0;
 
-                let clusterCenterX = trackedParticle.x;
-                let clusterCenterY = trackedParticle.y;
-                let clusterVx = trackedParticle.vx;
-                let clusterVy = trackedParticle.vy;
-                let totalMass = trackedParticle.mass;
-                let totalAngularMomentum = 0;
-                let effectiveMomentOfInertia = 0;
-
-                // For circularity calculation (rotation-invariant)
+                // For circularity calculation (rotation-invariant) - Initialize here to avoid ReferenceError
                 let Ixx = 0; // Sum of m*y^2
                 let Iyy = 0; // Sum of m*x^2
                 let Ixy = 0; // Sum of -m*x*y (product of inertia)
 
+                if (trackedParticle.isStar) {
+                    displayObjectName = trackedParticle.name; // Use the actual name "S1"
+                    displayObjectX = trackedParticle.x;
+                    displayObjectY = trackedParticle.y;
+                    displayObjectMass = trackedParticle.mass;
+                    displayObjectVx = trackedParticle.vx;
+                    displayObjectVy = trackedParticle.vy;
+                    displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
+                    displayObjectRotation = 0; // Star doesn't rotate for this simulation
+                    displayObjectCircularity = 1.0;
+                } else {
+                    const currentCluster = findCluster(trackedParticle);
 
-                if (currentCluster.length > 0) {
-                    // Recalculate center of mass and velocity for the cluster
-                    let sumX = 0;
-                    let sumY = 0;
-                    let sumVx = 0;
-                    let sumVy = 0;
-                    totalMass = 0;
+                    if (currentCluster.length === 0) {
+                        // If the non-star tracked particle is no longer found in any cluster (e.g., absorbed)
+                        isTracking = false;
+                        trackedParticle = null;
+                        toggleTrackingBtn.textContent = 'Toggle Tracking';
+                        statsDisplay.classList.add('hidden');
+                        cameraWorldX = 0;
+                        cameraWorldY = 0;
+                        return; // Exit animate for this frame if no valid tracked particle
+                    } else if (currentCluster.length === 1) { // This is the case for a single, non-star particle
+                        const p = currentCluster[0];
+                        displayObjectName = p.name;
+                        displayObjectX = p.x;
+                        displayObjectY = p.y;
+                        displayObjectMass = p.mass;
+                        displayObjectVx = p.vx;
+                        displayObjectVy = p.vy;
+                        displayObjectSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+                        displayObjectRotation = 0;
+                        displayObjectCircularity = 1.0;
+                    } else { // Multi-particle cluster
+                        displayObjectName = getClusterName(currentCluster); // Get the name for the tracked cluster
 
-                    for (const p of currentCluster) {
-                        sumX += p.x * p.mass;
-                        sumY += p.y * p.mass;
-                        sumVx += p.vx * p.mass;
-                        sumVy += p.vy * p.mass;
-                        totalMass += p.mass;
-                    }
+                        // Recalculate center of mass and velocity for the cluster
+                        let sumX = 0;
+                        let sumY = 0;
+                        let sumVx = 0;
+                        let sumVy = 0;
+                        displayObjectMass = 0; // Reset for cluster
+                        for (const p of currentCluster) {
+                            sumX += p.x * p.mass;
+                            sumY += p.y * p.mass;
+                            sumVx += p.vx * p.mass;
+                            sumVy += p.vy * p.mass;
+                            displayObjectMass += p.mass;
+                        }
 
-                    clusterCenterX = sumX / totalMass;
-                    clusterCenterY = sumY / totalMass;
-                    clusterVx = sumVx / totalMass;
-                    clusterVy = sumVy / totalMass;
+                        displayObjectX = sumX / displayObjectMass;
+                        displayObjectY = sumY / displayObjectMass;
+                        displayObjectVx = sumVx / displayObjectMass;
+                        displayObjectVy = sumVy / displayObjectMass;
 
-                    // Calculate angular momentum and moment of inertia around the cluster's center of mass
-                    for (const p of currentCluster) {
-                        const r_x = p.x - clusterCenterX;
-                        const r_y = p.y - clusterCenterY;
-                        const v_rel_x = p.vx - clusterVx;
-                        const v_rel_y = p.vy - clusterVy;
+                        // Calculate angular momentum and moment of inertia around the cluster's center of mass
+                        let totalAngularMomentum = 0;
+                        let effectiveMomentOfInertia = 0;
+                        for (const p of currentCluster) {
+                            const r_x = p.x - displayObjectX;
+                            const r_y = p.y - displayObjectY;
+                            const v_rel_x = p.vx - displayObjectVx;
+                            const v_rel_y = p.vy - displayObjectVy;
 
-                        // Angular momentum (2D cross product: r_x * v_y - r_y * v_x)
-                        totalAngularMomentum += p.mass * (r_x * v_rel_y - r_y * v_rel_x);
+                            // Angular momentum (2D cross product: r_x * v_y - r_y * v_x)
+                            totalAngularMomentum += p.mass * (r_x * v_rel_y - r_y * v_rel_x);
 
-                        // Moment of inertia (m * r^2)
-                        effectiveMomentOfInertia += p.mass * (r_x * r_x + r_y * r_y);
+                            // Moment of inertia (m * r^2)
+                            effectiveMomentOfInertia += p.mass * (r_x * r_x + r_y * r_y);
 
-                        // For rotation-invariant circularity
-                        Ixx += p.mass * r_y * r_y;
-                        Iyy += p.mass * r_x * r_x;
-                        Ixy += -p.mass * r_x * r_y;
+                            // For rotation-invariant circularity
+                            Ixx += p.mass * r_y * r_y;
+                            Iyy += p.mass * r_x * r_x;
+                            Ixy += -p.mass * r_x * r_y;
+                        }
+
+                        displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
+                        if (effectiveMomentOfInertia > 0) {
+                            const angularSpeedRad = totalAngularMomentum / effectiveMomentOfInertia; // radians per frame
+                            displayObjectRotation = angularSpeedRad * (180 / Math.PI); // degrees per frame
+                        }
+
+                        if (currentCluster.length > 1 && displayObjectMass > 0) { // Only calculate for clusters with multiple particles
+                            const avg_I = (Ixx + Iyy) / 2;
+                            const diff_I_half = (Ixx - Iyy) / 2;
+                            const sqrt_term = Math.sqrt(diff_I_half * diff_I_half + Ixy * Ixy);
+
+                            const I1 = avg_I + sqrt_term;
+                            const I2 = avg_I - sqrt_term;
+
+                            // Circularity is the ratio of the smaller principal moment to the larger one
+                            if (I1 > 0 && I2 > 0) { // Ensure non-zero moments
+                                displayObjectCircularity = Math.min(I1, I2) / Math.max(I1, I2);
+                            } else if (I1 === 0 && I2 === 0) {
+                                displayObjectCircularity = 1.0; // Perfectly circular (e.g., single point mass)
+                            } else {
+                                displayObjectCircularity = 0.0; // Highly elongated or degenerate case
+                            }
+                        }
                     }
                 }
-
-                const estimatedSpeed = Math.sqrt(clusterVx * clusterVx + clusterVy * clusterVy);
-                let rotationSpeedDeg = 0;
-                if (effectiveMomentOfInertia > 0) {
-                    const angularSpeedRad = totalAngularMomentum / effectiveMomentOfInertia; // radians per frame
-                    rotationSpeedDeg = angularSpeedRad * (180 / Math.PI); // degrees per frame
-                }
-
-                let circularity = 1.0; // Default to 1 for single particle or very small clusters
-                if (currentCluster.length > 1 && totalMass > 0) { // Only calculate for clusters with multiple particles
-                    const avg_I = (Ixx + Iyy) / 2;
-                    const diff_I_half = (Ixx - Iyy) / 2;
-                    const sqrt_term = Math.sqrt(diff_I_half * diff_I_half + Ixy * Ixy);
-
-                    const I1 = avg_I + sqrt_term;
-                    const I2 = avg_I - sqrt_term;
-
-                    // Circularity is the ratio of the smaller principal moment to the larger one
-                    if (I1 > 0 && I2 > 0) { // Ensure non-zero moments
-                        circularity = Math.min(I1, I2) / Math.max(I1, I2);
-                    } else if (I1 === 0 && I2 === 0) {
-                        circularity = 1.0; // Perfectly circular (e.g., single point mass)
-                    } else {
-                        circularity = 0.0; // Highly elongated or degenerate case
-                    }
-                }
-
 
                 // Update the stats display HTML element
                 updateStatsDisplay(
-                    clusterCenterX,
-                    clusterCenterY,
-                    estimatedSpeed,
-                    rotationSpeedDeg,
-                    totalMass,
-                    clusterVx,
-                    clusterVy,
-                    circularity
+                    displayObjectX,
+                    displayObjectY,
+                    displayObjectSpeed,
+                    displayObjectRotation,
+                    displayObjectMass,
+                    displayObjectVx,
+                    displayObjectVy,
+                    displayObjectCircularity,
+                    displayObjectName
                 );
 
                 // Apply WASD movement only if not paused
@@ -775,8 +1127,8 @@
                     if (!keys['a'] && !keys['d']) trackingOffsetX *= 0.9; // Decay factor
 
                     // Direct assignment for camera position to remove smooth panning
-                    cameraWorldX = clusterCenterX + trackingOffsetX;
-                    cameraWorldY = clusterCenterY + trackingOffsetY;
+                    cameraWorldX = displayObjectX + trackingOffsetX;
+                    cameraWorldY = displayObjectY + trackingOffsetY;
                 }
 
 
@@ -823,6 +1175,7 @@
                 let clusterCenterY = trackedParticle.y;
                 let clusterMinX = trackedParticle.x - trackedParticle.radius;
                 let clusterMaxX = trackedParticle.x + trackedParticle.radius;
+                // Initialize clusterMinY and clusterMaxY here
                 let clusterMinY = trackedParticle.y - trackedParticle.radius;
                 let clusterMaxY = trackedParticle.y + trackedParticle.radius;
 
@@ -879,6 +1232,12 @@
             pausePlayBtn.textContent = isPaused ? 'Play' : 'Pause'; // Update button text
         });
 
+        // Event listeners for new teleport buttons
+        teleportParticleBtn.addEventListener('click', teleportToRandomParticle);
+        teleportClusterBtn.addEventListener('click', teleportToRandomCluster);
+        teleportRandomObjectBtn.addEventListener('click', teleportToRandomObject);
+
+
         // Event listener for clicking on a particle to track it
         canvas.addEventListener('click', (event) => {
             const rect = canvas.getBoundingClientRect();
@@ -903,9 +1262,9 @@
             }
 
             if (clickedParticle) {
-                // If the clicked particle is the star, and it's already tracked, untrack it.
+                // If the clicked particle is already tracked, untrack it.
                 // Otherwise, track it.
-                if (clickedParticle.isStar && isTracking && trackedParticle === clickedParticle) {
+                if (isTracking && trackedParticle === clickedParticle) {
                     isTracking = false;
                     trackedParticle = null;
                     toggleTrackingBtn.textContent = 'Toggle Tracking';
@@ -920,6 +1279,7 @@
                     statsDisplay.classList.remove('hidden'); // Show stats
 
                     // Immediately center camera on the cluster's center of mass
+                    // If it's a single particle, findCluster will return just that particle
                     const initialCluster = findCluster(trackedParticle);
                     let initialClusterCenterX = clickedParticle.x;
                     let initialClusterCenterY = clickedParticle.y;
@@ -1081,8 +1441,21 @@
         }, { passive: false }); // Use passive: false to allow preventDefault
 
         canvas.addEventListener('touchmove', (event) => {
-            if (event.touches.length === 2) {
+            if (isDragging && event.touches.length === 1) { // Only for single touch drag
+                const currentX = event.touches[0].clientX;
+                const currentY = event.touches[0].clientY;
+
+                const dx = currentX - lastMouseX;
+                const dy = currentY - lastMouseY;
+
+                cameraWorldX -= dx / zoomLevel;
+                cameraWorldY -= dy / zoomLevel;
+
+                lastMouseX = currentX;
+                lastMouseY = currentY;
+            } else if (event.touches.length === 2) {
                 event.preventDefault(); // Prevent scrolling/default behavior during pinch-zoom/pan
+                isDragging = false; // Ensure single-finger drag is off during pinch
 
                 // Calculate current pinch distance
                 const dx = event.touches[0].clientX - event.touches[1].clientX;
@@ -1110,20 +1483,6 @@
                 lastCenter.x = currentCenterX;
                 lastCenter.y = currentCenterY;
 
-            } else if (event.touches.length === 1 && isDragging) {
-                // Continue single-finger drag (handled by mousemove)
-                // The browser's native touch-action will handle general panning if not explicitly handled here
-                const currentX = event.touches[0].clientX;
-                const currentY = event.touches[0].clientY;
-
-                const dx = currentX - lastMouseX;
-                const dy = currentY - lastMouseY;
-
-                cameraWorldX -= dx / zoomLevel;
-                cameraWorldY -= dy / zoomLevel;
-
-                lastMouseX = currentX;
-                lastMouseY = currentY;
             }
         }, { passive: false }); // Use passive: false to allow preventDefault
 
