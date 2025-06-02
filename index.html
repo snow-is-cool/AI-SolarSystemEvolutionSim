@@ -15,19 +15,19 @@
             min-height: 100vh;
             background-color: #1a202c; /* Dark background */
             color: #e2e8f0; /* Light text color */
-            overflow-y: auto; /* Allow vertical scrolling on the body */
+            overflow: hidden; /* Prevent scrolling on the body */
             user-select: none; /* Prevent text selection */
             -webkit-overflow-scrolling: touch; /* Enable smooth scrolling on iOS */
-            padding: 1rem; /* Add some padding to the body for mobile */
+            padding: 0.5rem; /* Reduce padding */
             box-sizing: border-box; /* Include padding in element's total width and height */
         }
         .canvas-container { /* New container for canvas and stats */
             position: relative; /* Make this the positioning context for absolute children */
             width: 100%;
-            height: 400px; /* Fixed height for the canvas container, adjust as needed */
-            margin-bottom: 1.5rem; /* Keep original margin below the container */
-            border-radius: 0.75rem; /* Apply rounded corners to container */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Apply shadow to container */
+            height: 300px; /* Slightly reduce canvas container height */
+            margin-bottom: 1rem; /* Reduce margin */
+            border-radius: 0.5rem; /* Reduce border radius */
+            box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.1), 0 3px 5px -2px rgba(0, 0, 0, 0.05); /* Slightly smaller shadow */
             background-color: #00001a; /* Apply background to container */
         }
         canvas {
@@ -44,31 +44,31 @@
             display: flex;
             flex-wrap: wrap; /* Allow wrapping on smaller screens */
             justify-content: center;
-            gap: 1rem; /* Space between control groups */
-            margin-bottom: 1rem;
-            padding: 0 0.5rem; /* Add some padding on sides for smaller screens */
+            gap: 0.75rem; /* Reduce gap */
+            margin-bottom: 0.75rem; /* Reduce margin */
+            padding: 0 0.25rem; /* Reduce padding */
             box-sizing: border-box;
             width: 100%; /* Ensure it takes full width */
         }
         .control-group { /* Group for time and zoom controls */
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.3rem; /* Reduce gap */
             background-color: rgba(0, 0, 0, 0.4);
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
+            padding: 0.3rem 0.6rem; /* Reduce padding */
+            border-radius: 0.3rem; /* Reduce border radius */
         }
         button {
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
+            padding: 0.5rem 1rem; /* Reduce button padding */
+            border-radius: 0.3rem; /* Reduce border radius */
+            font-weight: 500; /* Slightly thinner font-weight */
             transition: all 0.2s ease-in-out;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            font-size: 0.9rem; /* Adjust font size for better mobile readability */
+            box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.1), 0 1px 3px -1px rgba(0, 0, 0, 0.06); /* Smaller shadow */
+            font-size: 0.8rem; /* Reduce font size */
         }
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 10px -1px rgba(0, 0, 0, 0.15), 0 3px 6px -1px rgba(0, 0, 0, 0.08);
+            transform: translateY(-1px); /* Reduce hover lift */
+            box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.08); /* Smaller hover shadow */
         }
         .btn-primary {
             background-color: #63b3ed; /* Blue */
@@ -78,9 +78,9 @@
             background-color: #4299e1; /* Darker blue on hover */
         }
         .btn-secondary { /* For small +/- buttons */
-            padding: 0.25rem 0.75rem;
-            font-size: 0.875rem;
-            border-radius: 0.375rem;
+            padding: 0.15rem 0.5rem; /* Reduce padding */
+            font-size: 0.75rem; /* Reduce font size */
+            border-radius: 0.2rem; /* Reduce border radius */
             background-color: #a0aec0;
             color: #1a202c;
         }
@@ -89,31 +89,31 @@
         }
         .global-stats-bar { /* Style for the integrated global stats bar */
             background-color: rgba(0, 0, 0, 0.4);
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.8rem;
+            padding: 0.3rem 0.6rem; /* Reduce padding */
+            border-radius: 0.3rem; /* Reduce border radius */
+            font-size: 0.7rem; /* Reduce font size */
             color: #cbd5e0;
             text-align: center;
             width: 100%;
             box-sizing: border-box;
-            margin-bottom: 1rem; /* Space below this bar */
+            margin-bottom: 0.5rem; /* Reduce margin */
             display: flex; /* Use flexbox for alignment */
             justify-content: space-around; /* Distribute items evenly */
             align-items: center;
             flex-wrap: wrap; /* Allow wrapping on small screens */
-            gap: 0.5rem; /* Space between stat items */
+            gap: 0.3rem; /* Reduce gap */
         }
         .global-stats-bar span {
             white-space: nowrap; /* Prevent text from wrapping within a stat item */
         }
         .stats-display { /* Specific style for the dynamic stats panel on canvas */
             position: absolute; /* Position relative to the canvas-container */
-            top: 1rem;
-            right: 1rem;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
+            top: 0.5rem; /* Reduce top margin */
+            right: 0.5rem; /* Reduce right margin */
+            padding: 0.3rem 0.6rem; /* Reduce padding */
+            border-radius: 0.3rem; /* Reduce border radius */
             background-color: rgba(0, 0, 0, 0.6); /* Slightly more opaque for visibility */
-            font-size: 0.75rem;
+            font-size: 0.65rem; /* Reduce font size */
             text-align: right; /* Align text within the stats box */
             color: #e2e8f0;
             z-index: 10; /* Ensure it's above the canvas elements */
@@ -130,66 +130,77 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 1rem; /* Add padding to the main content area */
+            padding: 0.5rem; /* Reduce padding */
             box-sizing: border-box;
         }
         .particle-input {
             background-color: rgba(0, 0, 0, 0.4);
             border: 1px solid #4a5568;
-            border-radius: 0.375rem;
-            padding: 0.5rem 0.75rem;
+            border-radius: 0.2rem; /* Reduce border radius */
+            padding: 0.3rem 0.5rem; /* Reduce padding */
             color: #e2e8f0;
-            width: 100px; /* Fixed width for the input box */
+            width: 80px; /* Reduce width */
             text-align: center;
+            font-size: 0.7rem; /* Reduce font size */
         }
         .particle-input:focus {
             outline: none;
             border-color: #63b3ed;
-            box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.5);
+            box-shadow: 0 0 0 1px rgba(99, 179, 237, 0.5); /* Smaller shadow */
         }
 
-        /* Mobile-specific adjustments */
+        /* Mobile-specific adjustments (further reduced sizes) */
         @media (max-width: 600px) {
             body {
                 justify-content: flex-start; /* Align content to top on small screens */
-                padding: 0.5rem;
+                padding: 0.25rem; /* Further reduce padding */
             }
             .main-content-wrapper {
-                margin-top: 0.5rem;
-                margin-bottom: 0.5rem;
-                padding: 0.5rem;
+                margin-top: 0.25rem;
+                margin-bottom: 0.25rem;
+                padding: 0.25rem; /* Further reduce padding */
             }
             .controls-container {
                 flex-direction: column; /* Stack controls vertically */
                 align-items: center;
-                gap: 0.75rem; /* Reduce gap */
+                gap: 0.5rem; /* Further reduce gap */
             }
             .control-group {
                 width: 100%; /* Make zoom controls full width */
                 justify-content: space-around; /* Distribute items evenly */
-                padding: 0.75rem 0.5rem;
+                padding: 0.4rem 0.25rem; /* Further reduce padding */
             }
             button {
                 width: auto; /* Allow buttons to size naturally */
-                padding: 0.6rem 1.2rem; /* Adjust padding */
-                font-size: 0.85rem;
+                padding: 0.4rem 0.8rem; /* Further reduce padding */
+                font-size: 0.7rem; /* Further reduce font size */
             }
             .global-stats-bar {
-                font-size: 0.75rem; /* Smaller font for global stats on mobile */
-                padding: 0.4rem 0.8rem;
+                font-size: 0.65rem; /* Further reduce font size */
+                padding: 0.2rem 0.4rem; /* Further reduce padding */
+                gap: 0.2rem; /* Further reduce gap */
             }
             .stats-display {
-                top: 0.5rem;
-                right: 0.5rem;
-                font-size: 0.65rem;
-                padding: 0.3rem 0.6rem;
+                top: 0.25rem; /* Further reduce top margin */
+                right: 0.25rem; /* Further reduce right margin */
+                font-size: 0.6rem; /* Further reduce font size */
+                padding: 0.2rem 0.4rem; /* Further reduce padding */
             }
             h1 {
-                font-size: 2rem; /* Adjust heading size */
-                margin-bottom: 1rem;
+                font-size: 1.5rem; /* Further reduce heading size */
+                margin-bottom: 0.5rem; /* Further reduce margin */
             }
             p {
-                font-size: 0.75rem; /* Adjust paragraph size */
+                font-size: 0.65rem; /* Further reduce paragraph size */
+            }
+            .canvas-container {
+                height: 250px; /* Further reduce canvas container height */
+                margin-bottom: 0.75rem; /* Further reduce margin */
+            }
+            .particle-input {
+                font-size: 0.6rem; /* Further reduce font size */
+                padding: 0.2rem 0.4rem; /* Further reduce padding */
+                width: 60px; /* Further reduce width */
             }
         }
     </style>
@@ -516,6 +527,7 @@
             const desiredParticleCount = parseInt(particleCountInput.value, 10);
             if (isNaN(desiredParticleCount) || desiredParticleCount < 100 || desiredParticleCount > 10000) {
                 // Show a message or revert to default if input is invalid
+                // Using a simple alert for now, consider a custom modal for better UX
                 alert('Please enter a number between 100 and 10,000 for particle count.');
                 particleCountInput.value = 1000; // Reset to default
                 PARTICLE_COUNT = 1000;
