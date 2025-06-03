@@ -384,7 +384,7 @@
                 </div>
                 <div class="control-group">
                     <label for="velocityDampeningInput" class="text-sm">Velocity Dampening:</label>
-                    <input type="number" id="velocityDampeningInput" class="particle-input" value="0.1" min="0" max="1" step="0.01">
+                    <input type="number" id="velocityDampeningInput" class="particle-input" value="0.9" min="0" max="1" step="0.01">
                 </div>
                 <button id="resetDefaultsBtn" class="btn-primary mt-2">Reset to Defaults</button> </div>
         </div>
@@ -452,7 +452,7 @@
         const DEFAULT_MAX_PARTICLE_RADIUS = 2.5;
         const DEFAULT_INITIAL_DISK_INNER_RADIUS = 250;
         const DEFAULT_INITIAL_DISK_OUTER_RADIUS = 600;
-        const DEFAULT_COLLISION_DAMPENING = 0.1;
+        const DEFAULT_COLLISION_DAMPENING = 0.9; // Represents fraction of velocity LOST
 
         let G = DEFAULT_G;
         let COHESION_FORCE_G = DEFAULT_COHESION_FORCE_G;
@@ -497,6 +497,9 @@
         let nextClusterId = 1;
 
         let showRocheLimit = false; // Changed to false by default
+
+        // Initialize scroll lock state to unlocked
+        let isScrollLocked = false;
 
 
         // --- Helper Functions ---
@@ -701,7 +704,7 @@
             STAR_MASS = parseFloat(starMassInput.value);
             G = parseFloat(gravityConstantInput.value);
             COHESION_FORCE_G = parseFloat(cohesionConstantInput.value);
-            COLLISION_DAMPENING = parseFloat(velocityDampeningInput.value);
+            COLLISION_DAMPENING = parseFloat(velocityDampeningInput.value); // This value now represents fraction of velocity LOST
 
             if (isNaN(MIN_PARTICLE_RADIUS) || MIN_PARTICLE_RADIUS <= 0) {
                 alert('Min Radius must be a positive number.');
@@ -897,7 +900,10 @@
                         p2.y += normalY * separationFactor * 0.5;
 
                         // Calculate impulse for inelastic collision (dampened bounce)
-                        const impulse = (-(1 + COLLISION_DAMPENING) * impactVelocityAlongNormal) / (1 / p1.mass + 1 / p2.mass);
+                        // COLLISION_DAMPENING now represents the fraction of velocity LOST (0 to 1)
+                        // So, the coefficient of restitution (e) is 1 - COLLISION_DAMPENING
+                        const coefficientOfRestitution = 1 - COLLISION_DAMPENING;
+                        const impulse = (-(1 + coefficientOfRestitution) * impactVelocityAlongNormal) / (1 / p1.mass + 1 / p2.mass);
 
                         // Apply impulse
                         p1.vx -= (impulse / p1.mass) * normalX;
@@ -913,6 +919,128 @@
         function updateZoomLevelDisplay() {
             zoomLevelDisplay.textContent = `${zoomLevel.toFixed(1)}x`;
         }
+
+        // Helper for cross product for convex hull (determines turn direction)
+        function crossProduct(o, a, b) {
+            return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+        }
+
+        // Monotone Chain algorithm for convex hull
+        // Points are expected to be objects with {x, y} properties
+        function convexHull(points) {
+            if (points.length <= 2) {
+                // For 0, 1, or 2 points, the hull is just the points themselves.
+                // Sort to ensure consistent order for 2 points (e.g., for distance calculation).
+                return points.sort((a, b) => a.x - b.x || a.y - b.y);
+            }
+
+            // Sort points lexicographically (by x, then by y)
+            points.sort((a, b) => a.x - b.x || a.y - b.y);
+
+            const lower = [];
+            for (const p of points) {
+                // While there are at least two points in the lower hull and adding the current point
+                // would make a non-left turn (clockwise or collinear), pop the last point.
+                while (lower.length >= 2 && crossProduct(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+                    lower.pop();
+                }
+                lower.push(p);
+            }
+
+            const upper = [];
+            // Iterate in reverse for the upper hull
+            for (let i = points.length - 1; i >= 0; i--) {
+                const p = points[i];
+                // While there are at least two points in the upper hull and adding the current point
+                // would make a non-left turn (clockwise or collinear), pop the last point.
+                while (upper.length >= 2 && crossProduct(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+                    upper.pop();
+                }
+                upper.push(p);
+            }
+
+            // Remove the last point of each hull, as it's a duplicate of the first point of the other hull.
+            // This combines them correctly without redundant points.
+            upper.pop();
+            lower.pop();
+
+            return lower.concat(upper);
+        }
+
+        /**
+         * Calculates the circularity of a cluster based on its area (sum of individual circle areas)
+         * and the perimeter of the convex hull of points sampled from the circles' circumferences.
+         * Circularity = (4 * PI * Area) / (Perimeter^2)
+         * A perfect circle has a circularity of 1.
+         * @param {Array<Particle>} cluster The array of particles forming the cluster.
+         * @returns {number} The circularity value (0 to 1), or 1 for a single particle/star.
+         */
+        function calculateCircularity(cluster) {
+            if (!cluster || cluster.length === 0) {
+                return 0;
+            }
+
+            // Case 1: Single particle (or star)
+            if (cluster.length === 1) {
+                return 1.0; // A single particle is a perfect circle
+            }
+
+            // Calculate total area of the particles (treating as solid objects, ignoring overlap)
+            let totalArea = 0;
+            const outerPoints = []; // Collect points on the circumference for the convex hull
+
+            // Number of points to sample per circle for the convex hull
+            const pointsPerCircle = 16; // Increased resolution for better hull approximation
+
+            for (const p of cluster) {
+                totalArea += Math.PI * p.radius * p.radius; // Sum of areas of individual circles
+
+                // Generate points on the circumference of each particle
+                for (let i = 0; i < pointsPerCircle; i++) {
+                    const angle = (i / pointsPerCircle) * Math.PI * 2;
+                    outerPoints.push({
+                        x: p.x + p.radius * Math.cos(angle),
+                        y: p.y + p.radius * Math.sin(angle)
+                    });
+                }
+            }
+
+            // Calculate convex hull perimeter from all outer points
+            const hullPoints = convexHull(outerPoints);
+            let clusterPerimeter = 0;
+
+            if (hullPoints.length < 2) {
+                return 0; // Degenerate case (e.g., all sampled points are identical)
+            } else if (hullPoints.length === 2) {
+                // If the hull is just two points, it's a line segment. The "perimeter" of this degenerate shape
+                // for circularity purposes can be approximated as twice the distance between them.
+                clusterPerimeter = distance(hullPoints[0], hullPoints[1]) * 2;
+            } else {
+                // Calculate perimeter of the polygon formed by the convex hull
+                for (let i = 0; i < hullPoints.length; i++) {
+                    const p1 = hullPoints[i];
+                    const p2 = hullPoints[(i + 1) % hullPoints.length]; // Wrap around to the first point
+                    clusterPerimeter += distance(p1, p2);
+                }
+            }
+
+            if (clusterPerimeter === 0) {
+                return 0; // Avoid division by zero if perimeter is zero (e.g., all points are identical)
+            }
+
+            // Calculate the area of a circle with the same perimeter as the cluster's convex hull.
+            // Perimeter of a circle = 2 * PI * r_equivalent
+            // r_equivalent = Perimeter / (2 * PI)
+            // Area of equivalent circle = PI * r_equivalent^2 = PI * (Perimeter / (2 * PI))^2 = PI * Perimeter^2 / (4 * PI^2) = Perimeter^2 / (4 * PI)
+            const areaOfEquivalentCircle = (clusterPerimeter * clusterPerimeter) / (4 * Math.PI);
+
+            // Circularity is the ratio of the cluster's actual area to the area of a circle with the same perimeter.
+            // This is equivalent to (4 * PI * totalArea) / (clusterPerimeter * clusterPerimeter)
+            const circularity = totalArea / areaOfEquivalentCircle;
+            
+            return Math.min(1.0, Math.max(0.0, circularity)); // Clamp between 0 and 1
+        }
+
 
         function updateStatsDisplay(objectX, objectY, speed, rotation, mass, vx, vy, circularity, objectName) {
             const circularityPercentage = (circularity * 100).toFixed(2);
@@ -1105,7 +1233,7 @@
                     let displayObjectSpeed = 0;
                     let displayObjectRotation = 0;
                     let displayObjectMass = 0;
-                    let displayObjectCircularity = 1.0;
+                    let displayObjectCircularity = 1.0; // Initialize circularity
 
                     let Ixx = 0;
                     let Iyy = 0;
@@ -1120,7 +1248,7 @@
                         displayObjectVy = trackedParticle.vy;
                         displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
                         displayObjectRotation = 0;
-                        displayObjectCircularity = 1.0;
+                        displayObjectCircularity = 1.0; // Star is a perfect circle
                     } else {
                         const currentCluster = findCluster(trackedParticle);
 
@@ -1141,7 +1269,7 @@
                             displayObjectVy = p.vy;
                             displayObjectSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
                             displayObjectRotation = 0;
-                            displayObjectCircularity = 1.0;
+                            displayObjectCircularity = 1.0; // Single particle is a perfect circle
                         } else {
                             displayObjectName = getClusterName(currentCluster);
 
@@ -1186,22 +1314,8 @@
                                 displayObjectRotation = angularSpeedRad * (180 / Math.PI);
                             }
 
-                            if (currentCluster.length > 1 && displayObjectMass > 0) {
-                                const avg_I = (Ixx + Iyy) / 2;
-                                const diff_I_half = (Ixx - Iyy) / 2;
-                                const sqrt_term = Math.sqrt(diff_I_half * diff_I_half + Ixy * Ixy);
-
-                                const I1 = avg_I + sqrt_term;
-                                const I2 = avg_I - sqrt_term;
-
-                                if (I1 > 0 && I2 > 0) {
-                                    displayObjectCircularity = Math.min(I1, I2) / Math.max(I1, I2);
-                                } else if (I1 === 0 && I2 === 0) {
-                                    displayObjectCircularity = 1.0;
-                                } else {
-                                    displayObjectCircularity = 0.0;
-                                }
-                            }
+                            // Calculate circularity using the new method for clusters
+                            displayObjectCircularity = calculateCircularity(currentCluster);
                         }
                     }
 
@@ -1213,7 +1327,7 @@
                         displayObjectMass,
                         displayObjectVx,
                         displayObjectVy,
-                        displayObjectCircularity,
+                        displayObjectCircularity, // Pass the newly calculated value
                         displayObjectName
                     );
 
@@ -1264,32 +1378,41 @@
             // Draw tracking indicator if tracking is on and a particle is tracked
             if (isTracking && trackedParticle) {
                 const currentCluster = findCluster(trackedParticle);
-                // Initialize with trackedParticle's position; if cluster is empty, this is still valid
-                let clusterCenterX = trackedParticle.x;
-                let clusterCenterY = trackedParticle.y;
-                let clusterMinX = trackedParticle.x - trackedParticle.radius;
-                let clusterMaxX = trackedParticle.x + trackedParticle.radius;
-                let clusterMinY = trackedParticle.y - trackedParticle.radius;
-                let clusterMaxY = Math.max(clusterMaxY, trackedParticle.y + trackedParticle.radius);
-
-                if (currentCluster.length > 0) {
-                    // Recalculate center of mass for drawing the circle
-                    let sumX = 0;
-                    let sumY = 0;
-                    let totalMass = 0;
-                    for (const p of currentCluster) {
-                        sumX += p.x * p.mass;
-                        sumY += p.y * p.mass;
-                        totalMass += p.mass;
-
-                        clusterMinX = Math.min(clusterMinX, p.x - p.radius);
-                        clusterMaxX = Math.max(clusterMaxX, p.x + p.radius);
-                        clusterMinY = Math.min(clusterMinY, p.y - p.radius);
-                        clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
-                    }
-                    clusterCenterX = sumX / totalMass;
-                    clusterCenterY = sumY / totalMass;
+                // If the tracked particle is no longer part of any cluster (e.g., absorbed), stop tracking.
+                if (currentCluster.length === 0) {
+                    isTracking = false;
+                    trackedParticle = null;
+                    toggleTrackingBtn.textContent = 'Toggle Tracking';
+                    statsDisplay.classList.add('hidden');
+                    cameraWorldX = 0;
+                    cameraWorldY = 0;
+                    return; // Exit early if tracking is stopped
                 }
+
+                // Initialize bounding box variables with values from the first particle in the cluster
+                let clusterCenterX = currentCluster[0].x;
+                let clusterCenterY = currentCluster[0].y;
+                let clusterMinX = currentCluster[0].x - currentCluster[0].radius;
+                let clusterMaxX = currentCluster[0].x + currentCluster[0].radius;
+                let clusterMinY = currentCluster[0].y - currentCluster[0].radius;
+                let clusterMaxY = currentCluster[0].y + currentCluster[0].radius;
+
+                let sumX = 0;
+                let sumY = 0;
+                let totalMass = 0;
+
+                for (const p of currentCluster) {
+                    sumX += p.x * p.mass;
+                    sumY += p.y * p.mass;
+                    totalMass += p.mass;
+
+                    clusterMinX = Math.min(clusterMinX, p.x - p.radius);
+                    clusterMaxX = Math.max(clusterMaxX, p.x + p.radius);
+                    clusterMinY = Math.min(clusterMinY, p.y - p.radius);
+                    clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
+                }
+                clusterCenterX = sumX / totalMass;
+                clusterCenterY = sumY / totalMass;
 
                 ctx.strokeStyle = '#00FF00';
                 ctx.lineWidth = 1;
@@ -1369,7 +1492,6 @@
             }
         });
 
-        let isScrollLocked = true;
         toggleScrollLockBtn.addEventListener('click', () => {
             isScrollLocked = !isScrollLocked;
             if (isScrollLocked) {
@@ -1390,7 +1512,7 @@
             starMassInput.value = DEFAULT_STAR_MASS;
             gravityConstantInput.value = DEFAULT_G;
             cohesionConstantInput.value = DEFAULT_COHESION_FORCE_G;
-            velocityDampeningInput.value = DEFAULT_COLLISION_DAMPENING;
+            velocityDampeningInput.value = DEFAULT_COLLISION_DAMPENING; // Ensure input reflects default
         });
 
         // Event listener for toggling Roche Limit visibility
@@ -1524,7 +1646,7 @@
                     return;
                 }
                 const currentX = event.clientX || event.touches[0].clientX;
-                const currentY = event.clientY || event.touches[0].clientY;
+                const currentY = event.touches[0].clientY;
 
                 const dx = currentX - lastMouseX;
                 const dy = currentY - lastMouseY;
@@ -1641,7 +1763,11 @@
             starMassInput.value = STAR_MASS;
             gravityConstantInput.value = G;
             cohesionConstantInput.value = COHESION_FORCE_G;
-            velocityDampeningInput.value = COLLISION_DAMPENING;
+            velocityDampeningInput.value = DEFAULT_COLLISION_DAMPENING; // Ensure input reflects default
+
+            // Set initial scroll state and button text
+            document.body.style.overflow = isScrollLocked ? 'hidden' : 'auto';
+            toggleScrollLockBtn.textContent = isScrollLocked ? 'Unlock Scroll' : 'Lock Scroll';
 
             initSimulation();
             animate();
