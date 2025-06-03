@@ -430,10 +430,10 @@
 
 
         // Collision and breakup constants (unchanged)
-        const COLLISION_DAMPENING = 0; // How much velocity is kept on collision (1=elastic, 0=inelastic/stick)
-        const BREAKUP_THRESHOLD_VELOCITY_SQ = 1000; // Squared relative velocity to trigger a breakup (tune this)
-        const EXPLOSION_IMPULSE_STRENGTH = 1; // Outward impulse given during breakup (tune this)
-        const EXPLOSION_RADIUS_SQ = 6; // Squared radius for particles affected by explosion (tune this)
+        const COLLISION_DAMPENING = 0.05; // How much velocity is kept on collision (1=elastic, 0=inelastic/stick)
+        const BREAKUP_THRESHOLD_VELOCITY_SQ = 1000000000000000; // Squared relative velocity to trigger a breakup (tune this)
+        const EXPLOSION_IMPULSE_STRENGTH = 0.01; // Outward impulse given during breakup (tune this)
+        const EXPLOSION_RADIUS_SQ = 0.5; // Squared radius for particles affected by explosion (tune this)
 
         // --- Simulation Variables ---
         let particles = []; // Array to hold all active particles (star + smaller bodies)
