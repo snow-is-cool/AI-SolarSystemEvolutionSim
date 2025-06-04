@@ -536,7 +536,8 @@
                 const currentP = queue.shift();
 
                 for (const otherP of particles) {
-                    if (otherP.isAlive && otherP !== currentP && !cluster.has(otherP)) {
+                    // Ensure otherP is a valid object before accessing its properties
+                    if (otherP && otherP.isAlive && otherP !== currentP && !cluster.has(otherP)) {
                         const requiredDistance = currentP.radius + otherP.radius;
                         if (distance(currentP, otherP) <= requiredDistance + CLUSTER_TOUCH_EPSILON) {
                             cluster.add(otherP);
@@ -592,12 +593,15 @@
         }
 
         /**
-         * Generates or retrieves a stable decimal name for a cluster.
+         * Generates or retrieves a stable decimal name for a cluster or returns particle name for single particle.
          * @param {Array<Particle>} clusterParticles An array of particles forming the cluster.
-         * @returns {string | null} The cluster name (e.g., "C1", "C2") or null if not a valid cluster.
+         * @returns {string | null} The cluster name (e.g., "C1", "C2") or the particle name (e.g., "P1") or null if invalid.
          */
         function getClusterName(clusterParticles) {
-            if (clusterParticles.length <= 1) return null;
+            if (!clusterParticles || clusterParticles.length === 0) return null;
+            if (clusterParticles.length === 1) {
+                return clusterParticles[0].name; // Return the name of the single particle
+            }
 
             const particleNames = clusterParticles.map(p => p.name).sort();
             const clusterKey = particleNames.join('-');
@@ -729,7 +733,7 @@
             if (isNaN(STAR_MASS) || STAR_MASS <= 0) {
                 alert('Star Mass must be a positive number.');
                 starMassInput.value = DEFAULT_STAR_MASS;
-                STAR_MASS = DEFAULT_STAR_MASS;
+                STAR_MASS = DEFAULT_MASS;
             }
             if (isNaN(G)) {
                 alert('Gravity Constant (G) must be a number.');
@@ -973,16 +977,19 @@
          * Circularity = (4 * PI * Area) / (Perimeter^2)
          * A perfect circle has a circularity of 1.
          * @param {Array<Particle>} cluster The array of particles forming the cluster.
-         * @returns {number} The circularity value (0 to 1), or 1 for a single particle/star.
+         * @returns {{circularity: number, totalArea: number, clusterPerimeter: number}} An object containing the circularity, area, and perimeter.
          */
         function calculateCircularity(cluster) {
             if (!cluster || cluster.length === 0) {
-                return 0;
+                return { circularity: 0, totalArea: 0, clusterPerimeter: 0 };
             }
 
             // Case 1: Single particle (or star)
             if (cluster.length === 1) {
-                return 1.0; // A single particle is a perfect circle
+                const p = cluster[0];
+                const area = Math.PI * p.radius * p.radius;
+                const perimeter = 2 * Math.PI * p.radius;
+                return { circularity: 1.0, totalArea: area, clusterPerimeter: perimeter }; // A single particle is a perfect circle
             }
 
             // Calculate total area of the particles (treating as solid objects, ignoring overlap)
@@ -1010,7 +1017,7 @@
             let clusterPerimeter = 0;
 
             if (hullPoints.length < 2) {
-                return 0; // Degenerate case (e.g., all sampled points are identical)
+                return { circularity: 0, totalArea: totalArea, clusterPerimeter: 0 }; // Degenerate case (e.g., all sampled points are identical)
             } else if (hullPoints.length === 2) {
                 // If the hull is just two points, it's a line segment. The "perimeter" of this degenerate shape
                 // for circularity purposes can be approximated as twice the distance between them.
@@ -1025,24 +1032,24 @@
             }
 
             if (clusterPerimeter === 0) {
-                return 0; // Avoid division by zero if perimeter is zero (e.g., all points are identical)
+                return { circularity: 0, totalArea: totalArea, clusterPerimeter: 0 }; // Avoid division by zero if perimeter is zero (e.g., all points are identical)
             }
 
             // Calculate the area of a circle with the same perimeter as the cluster's convex hull.
             // Perimeter of a circle = 2 * PI * r_equivalent
             // r_equivalent = Perimeter / (2 * PI)
-            // Area of equivalent circle = PI * r_equivalent^2 = PI * (Perimeter / (2 * PI))^2 = PI * Perimeter^2 / (4 * PI^2) = Perimeter^2 / (4 * PI)
+            // Area of equivalent circle = PI * r_equivalent^2 = PI * (Perimeter / (2 * PI))^2 = PI * Perimeter^2 / (4 * PI)
             const areaOfEquivalentCircle = (clusterPerimeter * clusterPerimeter) / (4 * Math.PI);
 
             // Circularity is the ratio of the cluster's actual area to the area of a circle with the same perimeter.
             // This is equivalent to (4 * PI * totalArea) / (clusterPerimeter * clusterPerimeter)
             const circularity = totalArea / areaOfEquivalentCircle;
             
-            return Math.min(1.0, Math.max(0.0, circularity)); // Clamp between 0 and 1
+            return { circularity: Math.min(1.0, Math.max(0.0, circularity)), totalArea: totalArea, clusterPerimeter: clusterPerimeter }; // Clamp between 0 and 1
         }
 
 
-        function updateStatsDisplay(objectX, objectY, speed, rotation, mass, vx, vy, circularity, objectName) {
+        function updateStatsDisplay(objectX, objectY, speed, rotation, mass, vx, vy, circularity, area, perimeter, objectName) {
             const circularityPercentage = (circularity * 100).toFixed(2);
             let statsHeading = "";
 
@@ -1065,6 +1072,8 @@
                     Speed: ${speed.toFixed(2)}<br>
                     Mass: ${mass.toFixed(2)}U<br>
                     Rotation Speed: ${rotation.toFixed(2)}°/frame<br>
+                    Area: ${area.toFixed(2)} Pixels<br>
+                    Perimeter: ${perimeter.toFixed(2)} Pixels<br>
                     Circularity: ${circularityPercentage}%
                 </div>
             `;
@@ -1222,129 +1231,168 @@
                     statsDisplay.classList.add('hidden');
                     cameraWorldX = 0;
                     cameraWorldY = 0;
-                } else {
-                    statsDisplay.classList.remove('hidden');
-
-                    let displayObjectName = "";
-                    let displayObjectX = 0;
-                    let displayObjectY = 0;
-                    let displayObjectVx = 0;
-                    let displayObjectVy = 0;
-                    let displayObjectSpeed = 0;
-                    let displayObjectRotation = 0;
-                    let displayObjectMass = 0;
-                    let displayObjectCircularity = 1.0; // Initialize circularity
-
-                    let Ixx = 0;
-                    let Iyy = 0;
-                    let Ixy = 0;
-
-                    if (trackedParticle.isStar) {
-                        displayObjectName = trackedParticle.name;
-                        displayObjectX = trackedParticle.x;
-                        displayObjectY = trackedParticle.y;
-                        displayObjectMass = trackedParticle.mass;
-                        displayObjectVx = trackedParticle.vx;
-                        displayObjectVy = trackedParticle.vy;
-                        displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
-                        displayObjectRotation = 0;
-                        displayObjectCircularity = 1.0; // Star is a perfect circle
-                    } else {
-                        const currentCluster = findCluster(trackedParticle);
-
-                        if (currentCluster.length === 0) {
-                            isTracking = false;
-                            trackedParticle = null;
-                            toggleTrackingBtn.textContent = 'Toggle Tracking';
-                            statsDisplay.classList.add('hidden');
-                            cameraWorldX = 0;
-                            cameraWorldY = 0;
-                        } else if (currentCluster.length === 1) {
-                            const p = currentCluster[0];
-                            displayObjectName = p.name;
-                            displayObjectX = p.x;
-                            displayObjectY = p.y;
-                            displayObjectMass = p.mass;
-                            displayObjectVx = p.vx;
-                            displayObjectVy = p.vy;
-                            displayObjectSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-                            displayObjectRotation = 0;
-                            displayObjectCircularity = 1.0; // Single particle is a perfect circle
-                        } else {
-                            displayObjectName = getClusterName(currentCluster);
-
-                            let sumX = 0;
-                            let sumY = 0;
-                            let sumVx = 0;
-                            let sumVy = 0;
-                            displayObjectMass = 0;
-                            for (const p of currentCluster) {
-                                sumX += p.x * p.mass;
-                                sumY += p.y * p.mass;
-                                sumVx += p.vx * p.mass;
-                                sumVy += p.vy * p.mass;
-                                displayObjectMass += p.mass;
-                            }
-
-                            displayObjectX = sumX / displayObjectMass;
-                            displayObjectY = sumY / displayObjectMass;
-                            displayObjectVx = sumVx / displayObjectMass;
-                            displayObjectVy = sumVy / displayObjectMass;
-
-                            let totalAngularMomentum = 0;
-                            let effectiveMomentOfInertia = 0;
-                            for (const p of currentCluster) {
-                                const r_x = p.x - displayObjectX;
-                                const r_y = p.y - displayObjectY;
-                                const v_rel_x = p.vx - displayObjectVx;
-                                const v_rel_y = p.vy - displayObjectVy;
-
-                                totalAngularMomentum += p.mass * (r_x * v_rel_y - r_y * v_rel_x);
-
-                                effectiveMomentOfInertia += p.mass * (r_x * r_x + r_y * r_y);
-
-                                Ixx += p.mass * r_y * r_y;
-                                Iyy += p.mass * r_x * r_x;
-                                Ixy += -p.mass * r_x * r_y;
-                            }
-
-                            displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
-                            if (effectiveMomentOfInertia > 0) {
-                                const angularSpeedRad = totalAngularMomentum / effectiveMomentOfInertia;
-                                displayObjectRotation = angularSpeedRad * (180 / Math.PI);
-                            }
-
-                            // Calculate circularity using the new method for clusters
-                            displayObjectCircularity = calculateCircularity(currentCluster);
-                        }
-                    }
-
-                    updateStatsDisplay(
-                        displayObjectX,
-                        displayObjectY,
-                        displayObjectSpeed,
-                        displayObjectRotation,
-                        displayObjectMass,
-                        displayObjectVx,
-                        displayObjectVy,
-                        displayObjectCircularity, // Pass the newly calculated value
-                        displayObjectName
-                    );
-
-                    if (!isPaused) {
-                        if (keys['w']) trackingOffsetY += CAMERA_MOVE_SPEED / zoomLevel;
-                        if (keys['s']) trackingOffsetY -= CAMERA_MOVE_SPEED / zoomLevel;
-                        if (keys['a']) trackingOffsetX -= CAMERA_MOVE_SPEED / zoomLevel;
-                        if (keys['d']) trackingOffsetX += CAMERA_MOVE_SPEED / zoomLevel;
-
-                        if (!keys['w'] && !keys['s']) trackingOffsetY *= 0.9;
-                        if (!keys['a'] && !keys['d']) trackingOffsetX *= 0.9;
-
-                        cameraWorldX = displayObjectX + trackingOffsetX;
-                        cameraWorldY = displayObjectY + trackingOffsetY;
-                    }
+                    return; // Exit early if tracking is stopped
                 }
 
+                const currentCluster = findCluster(trackedParticle);
+
+                if (currentCluster.length === 0) {
+                    isTracking = false;
+                    trackedParticle = null;
+                    toggleTrackingBtn.textContent = 'Toggle Tracking';
+                    statsDisplay.classList.add('hidden');
+                    cameraWorldX = 0;
+                    cameraWorldY = 0;
+                    return; // Exit early if tracking is stopped
+                }
+
+                // Initialize bounding box variables with extreme values
+                let clusterMinX = Infinity;
+                let clusterMaxX = -Infinity;
+                let clusterMinY = Infinity;
+                let clusterMaxY = -Infinity;
+                let clusterCenterX = 0;
+                let clusterCenterY = 0;
+
+                let sumX = 0;
+                let sumY = 0;
+                let totalMass = 0;
+
+                for (const p of currentCluster) {
+                    sumX += p.x * p.mass;
+                    sumY += p.y * p.mass;
+                    totalMass += p.mass;
+
+                    // Update min/max values dynamically based on particle position and radius
+                    clusterMinX = Math.min(clusterMinX, p.x - p.radius);
+                    clusterMaxX = Math.max(clusterMaxX, p.x + p.radius);
+                    clusterMinY = Math.min(clusterMinY, p.y - p.radius);
+                    clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
+                }
+
+                // Calculate center of mass
+                if (totalMass > 0) {
+                    clusterCenterX = sumX / totalMass;
+                    clusterCenterY = sumY / totalMass;
+                } else {
+                    // Fallback if totalMass is 0 (should ideally not happen if currentCluster.length > 0)
+                    // Use the first particle's position as a fallback center
+                    clusterCenterX = currentCluster[0].x;
+                    clusterCenterY = currentCluster[0].y;
+                }
+
+
+                statsDisplay.classList.remove('hidden');
+
+                let displayObjectName = "";
+                let displayObjectX = 0;
+                let displayObjectY = 0;
+                let displayObjectVx = 0;
+                let displayObjectVy = 0;
+                let displayObjectSpeed = 0;
+                let displayObjectRotation = 0;
+                let displayObjectMass = 0;
+                let displayObjectCircularity = 1.0; // Initialize circularity
+                let displayObjectArea = 0;
+                let displayObjectPerimeter = 0;
+
+
+                let Ixx = 0;
+                let Iyy = 0;
+                let Ixy = 0;
+
+                if (trackedParticle.isStar) {
+                    displayObjectName = trackedParticle.name;
+                    displayObjectX = trackedParticle.x;
+                    displayObjectY = trackedParticle.y;
+                    displayObjectMass = trackedParticle.mass;
+                    displayObjectVx = trackedParticle.vx;
+                    displayObjectVy = trackedParticle.vy;
+                    displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
+                    displayObjectRotation = 0;
+                    const starArea = Math.PI * trackedParticle.radius * trackedParticle.radius;
+                    const starPerimeter = 2 * Math.PI * trackedParticle.radius;
+                    displayObjectCircularity = 1.0; // Star is a perfect circle
+                    displayObjectArea = starArea;
+                    displayObjectPerimeter = starPerimeter;
+                } else {
+                    // currentCluster is guaranteed to be non-empty here due to checks above
+                    displayObjectName = getClusterName(currentCluster);
+
+                    let sumXForStats = 0;
+                    let sumYForStats = 0;
+                    let sumVxForStats = 0;
+                    let sumVyForStats = 0;
+                    displayObjectMass = 0;
+                    for (const p of currentCluster) {
+                        sumXForStats += p.x * p.mass;
+                        sumYForStats += p.y * p.mass;
+                        sumVxForStats += p.vx * p.mass;
+                        sumVyForStats += p.vy * p.mass;
+                        displayObjectMass += p.mass;
+                    }
+
+                    displayObjectX = sumXForStats / displayObjectMass;
+                    displayObjectY = sumYForStats / displayObjectMass;
+                    displayObjectVx = sumVxForStats / displayObjectMass;
+                    displayObjectVy = sumVyForStats / displayObjectMass;
+
+                    let totalAngularMomentum = 0;
+                    let effectiveMomentOfInertia = 0;
+                    for (const p of currentCluster) {
+                        const r_x = p.x - displayObjectX;
+                        const r_y = p.y - displayObjectY;
+                        const v_rel_x = p.vx - displayObjectVx;
+                        const v_rel_y = p.vy - displayObjectVy;
+
+                        totalAngularMomentum += p.mass * (r_x * v_rel_y - r_y * v_rel_x);
+
+                        effectiveMomentOfInertia += p.mass * (r_x * r_x + r_y * r_y);
+
+                        Ixx += p.mass * r_y * r_y;
+                        Iyy += p.mass * r_x * r_x;
+                        Ixy += -p.mass * r_x * r_y;
+                    }
+
+                    displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
+                    if (effectiveMomentOfInertia > 0) {
+                        const angularSpeedRad = totalAngularMomentum / effectiveMomentOfInertia;
+                        displayObjectRotation = angularSpeedRad * (180 / Math.PI);
+                    }
+
+                    // Calculate circularity, area, and perimeter using the new method for clusters
+                    const circularityResult = calculateCircularity(currentCluster);
+                    displayObjectCircularity = circularityResult.circularity;
+                    displayObjectArea = circularityResult.totalArea;
+                    displayObjectPerimeter = circularityResult.clusterPerimeter;
+                }
+
+                updateStatsDisplay(
+                    displayObjectX,
+                    displayObjectY,
+                    displayObjectSpeed,
+                    displayObjectRotation,
+                    displayObjectMass,
+                    displayObjectVx,
+                    displayObjectVy,
+                    displayObjectCircularity, // Pass the newly calculated value
+                    displayObjectArea, // Pass the new area value
+                    displayObjectPerimeter, // Pass the new perimeter value
+                    displayObjectName
+                );
+
+                if (!isPaused) {
+                    if (keys['w']) trackingOffsetY += CAMERA_MOVE_SPEED / zoomLevel;
+                    if (keys['s']) trackingOffsetY -= CAMERA_MOVE_SPEED / zoomLevel;
+                    if (keys['a']) trackingOffsetX -= CAMERA_MOVE_SPEED / zoomLevel;
+                    if (keys['d']) trackingOffsetX += CAMERA_MOVE_SPEED / zoomLevel;
+
+                    if (!keys['w'] && !keys['s']) trackingOffsetY *= 0.9;
+                    if (!keys['a'] && !keys['d']) trackingOffsetX *= 0.9;
+
+                    cameraWorldX = displayObjectX + trackingOffsetX;
+                    cameraWorldY = displayObjectY + trackingOffsetY;
+                }
             } else {
                 statsDisplay.classList.add('hidden');
 
@@ -1389,13 +1437,13 @@
                     return; // Exit early if tracking is stopped
                 }
 
-                // Initialize bounding box variables with values from the first particle in the cluster
-                let clusterCenterX = currentCluster[0].x;
-                let clusterCenterY = currentCluster[0].y;
-                let clusterMinX = currentCluster[0].x - currentCluster[0].radius;
-                let clusterMaxX = currentCluster[0].x + currentCluster[0].radius;
-                let clusterMinY = currentCluster[0].y - currentCluster[0].radius;
-                let clusterMaxY = currentCluster[0].y + currentCluster[0].radius;
+                // Initialize bounding box variables with extreme values
+                let clusterMinX = Infinity;
+                let clusterMaxX = -Infinity;
+                let clusterMinY = Infinity;
+                let clusterMaxY = -Infinity;
+                let clusterCenterX = 0;
+                let clusterCenterY = 0;
 
                 let sumX = 0;
                 let sumY = 0;
@@ -1411,8 +1459,17 @@
                     clusterMinY = Math.min(clusterMinY, p.y - p.radius);
                     clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
                 }
-                clusterCenterX = sumX / totalMass;
-                clusterCenterY = sumY / totalMass;
+
+                // Calculate center of mass
+                if (totalMass > 0) {
+                    clusterCenterX = sumX / totalMass;
+                    clusterCenterY = sumY / totalMass;
+                } else {
+                    // Fallback if totalMass is 0 (should ideally not happen if currentCluster.length > 0)
+                    clusterCenterX = currentCluster[0].x;
+                    clusterCenterY = currentCluster[0].y;
+                }
+
 
                 ctx.strokeStyle = '#00FF00';
                 ctx.lineWidth = 1;
@@ -1646,7 +1703,7 @@
                     return;
                 }
                 const currentX = event.clientX || event.touches[0].clientX;
-                const currentY = event.touches[0].clientY;
+                const currentY = event.clientY || event.touches[0].clientY;
 
                 const dx = currentX - lastMouseX;
                 const dy = currentY - lastMouseY;
