@@ -446,9 +446,14 @@
         let crashquietAudio = null;
 
         // Collision sound thresholds (Impact speed)
-        const LOUD_IMPACT_THRESHOLD = 3.0; // Speed above which crashloud.mp3 plays
-        const QUIET_IMPACT_THRESHOLD = 0.25; // Speed below which no sound plays
-        const MAX_AUDIO_VOLUME = 0.8; // Max volume for sounds
+        const LOUD_IMPACT_THRESHOLD = 3.0; // Speed above which crashloud.mp3 plays for Cluster vs Cluster
+        const QUIET_IMPACT_THRESHOLD = 0.25; // Speed below which no sound plays for Cluster vs Cluster
+
+        const MAX_AUDIO_VOLUME = 0.8; // Max global volume for sounds
+        const PVP_PVC_MAX_VOLUME = 0.5; // Max volume for Particle vs Particle/Cluster sounds
+        const CVC_LOUD_VOLUME = 0.5; // Fixed volume for loud Cluster vs Cluster crashes
+
+        const MAX_AUDIBLE_DISTANCE = 1500; // Distance beyond which sounds fade out completely
 
         // --- Simulation Constants (now 'let' to be adjustable) ---
         // Store initial default values separately for the reset button
@@ -546,7 +551,7 @@
 
                 for (const otherP of particles) {
                     // Ensure otherP is a valid object before accessing its properties
-                    if (otherP && otherP.isAlive && otherP !== currentP && !cluster.has(otherP)) {
+                    if (otherP && otherP.isAlive && otherP !== currentP && !otherP.isStar && !cluster.has(otherP)) {
                         const requiredDistance = currentP.radius + otherP.radius;
                         if (distance(currentP, otherP) <= requiredDistance + CLUSTER_TOUCH_EPSILON) {
                             cluster.add(otherP);
@@ -591,7 +596,7 @@
                             }
                         }
                     }
-                    if (currentCluster.size > 1) {
+                    if (currentCluster.size > 1) { // Only consider groups of 2 or more particles as clusters
                         const clusterArray = Array.from(currentCluster);
                         getClusterName(clusterArray);
                         allClusters.push(clusterArray);
@@ -838,7 +843,7 @@
                     const r_sq = dx * dx + dy * dy;
                     const r = Math.sqrt(r_sq);
 
-                    if (r < 1) {
+                    if (r < 1) { // Prevent division by zero or excessive force at zero distance
                         continue;
                     }
 
@@ -868,11 +873,23 @@
             }
         }
 
-        // Helper function to play sound
-        function playCollisionSound(audioElement, volume) {
+        // Helper function to play sound with distance attenuation
+        function playCollisionSound(audioElement, baseVolume, impactX, impactY) {
             if (audioElement) {
+                const distance = Math.sqrt(
+                    Math.pow(impactX - cameraWorldX, 2) +
+                    Math.pow(impactY - cameraWorldY, 2)
+                );
+
+                let attenuatedVolume = baseVolume;
+                if (distance > 0) {
+                    // Volume linearly decreases from baseVolume at 0 distance to 0 at MAX_AUDIBLE_DISTANCE
+                    const distanceFactor = 1 - (distance / MAX_AUDIBLE_DISTANCE);
+                    attenuatedVolume = baseVolume * Math.max(0, distanceFactor); // Ensure volume doesn't go negative
+                }
+
                 const clonedAudio = audioElement.cloneNode();
-                clonedAudio.volume = Math.max(0, Math.min(MAX_AUDIO_VOLUME, volume)); // Clamp volume
+                clonedAudio.volume = Math.max(0, Math.min(MAX_AUDIO_VOLUME, attenuatedVolume)); // Clamp final volume
                 clonedAudio.play().catch(e => { /* console.error("Audio playback error:", e); */ }); // Catch and ignore play errors
             }
         }
@@ -893,6 +910,10 @@
                     const dist_between_centers = distance(p1, p2);
 
                     if (dist_between_centers < (p1.radius + p2.radius)) {
+                        // Collision point for sound
+                        const impactX = (p1.x + p2.x) / 2;
+                        const impactY = (p1.y + p2.y) / 2;
+
                         // --- Star Absorption ---
                         if (p1.isStar || p2.isStar) {
                             const absorber = p1.isStar ? p1 : p2;
@@ -934,24 +955,33 @@
                         p2.vy += (impulse / p2.mass) * normalY;
 
                         // --- Sound Logic ---
-                        // Check if they are already part of the same cluster
+                        // Check if they are already part of the same cluster before collision (to prevent internal cluster sounds)
                         const p1Cluster = findCluster(p1);
                         const p2Cluster = findCluster(p2);
-
                         const areSameCluster = p1Cluster.some(p => p === p2);
 
-                        if (!areSameCluster) { // Only play sound if they are NOT part of the same cluster
+                        if (!areSameCluster) {
                             const absImpactSpeed = Math.abs(impactVelocityAlongNormal);
 
-                            if (absImpactSpeed >= LOUD_IMPACT_THRESHOLD) {
-                                playCollisionSound(crashloudAudio, MAX_AUDIO_VOLUME);
-                            } else if (absImpactSpeed > QUIET_IMPACT_THRESHOLD) {
-                                // Scale volume between 0 and MAX_AUDIO_VOLUME based on speed relative to thresholds
-                                const volume = (absImpactSpeed - QUIET_IMPACT_THRESHOLD) /
-                                               (LOUD_IMPACT_THRESHOLD - QUIET_IMPACT_THRESHOLD);
-                                playCollisionSound(crashquietAudio, volume);
+                            const isP1TrulyCluster = p1Cluster.length > 1;
+                            const isP2TrulyCluster = p2Cluster.length > 1;
+
+                            if (isP1TrulyCluster && isP2TrulyCluster) {
+                                // Cluster vs Cluster
+                                if (absImpactSpeed >= LOUD_IMPACT_THRESHOLD) {
+                                    playCollisionSound(crashloudAudio, CVC_LOUD_VOLUME, impactX, impactY);
+                                } else if (absImpactSpeed > QUIET_IMPACT_THRESHOLD) {
+                                    // Scale volume between 0 and 0.5 for CvC quiet crashes
+                                    const volumeScaleFactor = (absImpactSpeed - QUIET_IMPACT_THRESHOLD) /
+                                                              (LOUD_IMPACT_THRESHOLD - QUIET_IMPACT_THRESHOLD);
+                                    playCollisionSound(crashquietAudio, volumeScaleFactor * PVP_PVC_MAX_VOLUME, impactX, impactY);
+                                }
+                            } else {
+                                // Particle vs Particle or Particle vs Cluster
+                                // Always play crashquiet, scaled, capping at 0.5
+                                const volumeScaleFactor = Math.min(1.0, absImpactSpeed / QUIET_IMPACT_THRESHOLD);
+                                playCollisionSound(crashquietAudio, volumeScaleFactor * PVP_PVC_MAX_VOLUME, impactX, impactY);
                             }
-                            // else: speed <= QUIET_IMPACT_THRESHOLD, no sound plays
                         }
                     }
                 }
@@ -1121,6 +1151,7 @@
 
         function teleportToRandomParticle() {
             const nonStarParticles = particles.filter(p => p.isAlive && !p.isStar);
+            // Filter for true single particles (not part of any cluster)
             const singleParticles = nonStarParticles.filter(p => findCluster(p).length === 1);
             
             if (singleParticles.length > 0) {
@@ -1135,7 +1166,7 @@
                 trackingOffsetX = 0;
                 trackingOffsetY = 0;
             } else {
-                if (nonStarParticles.length > 0) {
+                if (nonStarParticles.length > 0) { // If no single particles, track any non-star particle
                     const randomIndex = Math.floor(Math.random() * nonStarParticles.length);
                     trackedParticle = nonStarParticles[randomIndex];
                     isTracking = true;
@@ -1158,7 +1189,7 @@
         }
 
         function teleportToRandomCluster() {
-            const { clusters } = countGlobalStats();
+            const { clusters } = countGlobalStats(); // Get actual clusters (size > 1)
             if (clusters.length > 0) {
                 const randomIndex = Math.floor(Math.random() * clusters.length);
                 const randomCluster = clusters[randomIndex];
@@ -1174,7 +1205,7 @@
                 const clusterCenterX = sumX / totalMass;
                 const clusterCenterY = sumY / totalMass;
 
-                trackedParticle = randomCluster[0];
+                trackedParticle = randomCluster[0]; // Track a particle within the cluster to ensure it's "alive"
                 isTracking = true;
                 toggleTrackingBtn.textContent = 'Tracking ON';
                 statsDisplay.classList.remove('hidden');
@@ -1202,14 +1233,16 @@
             if (star && star.isAlive) {
                 trackableObjects.push(star);
             }
+            // Add single particles
             nonStarParticles.forEach(p => {
-                if (findCluster(p).length === 1) {
+                if (findCluster(p).length === 1) { // Only add if it's a true single particle
                     trackableObjects.push(p);
                 }
             });
+            // Add representative particle for each cluster
             clusters.forEach(cluster => {
                 if (cluster.length > 0) {
-                    trackableObjects.push(cluster[0]);
+                    trackableObjects.push(cluster[0]); // Use first particle of cluster as representative
                 }
             });
 
@@ -1223,6 +1256,7 @@
                 let targetX = trackedParticle.x;
                 let targetY = trackedParticle.y;
 
+                // If the tracked object is part of a cluster (and not the star itself), track its center of mass
                 if (!trackedParticle.isStar && findCluster(trackedParticle).length > 1) {
                     const cluster = findCluster(trackedParticle);
                     let sumX = 0;
@@ -1275,7 +1309,8 @@
 
                 const currentCluster = findCluster(trackedParticle);
 
-                if (currentCluster.length === 0) {
+                // If the tracked particle is a single particle and it gets absorbed, findCluster will return empty
+                if (currentCluster.length === 0 && !trackedParticle.isStar) {
                     isTracking = false;
                     trackedParticle = null;
                     toggleTrackingBtn.textContent = 'Toggle Tracking';
@@ -1285,44 +1320,7 @@
                     return; // Exit early if tracking is stopped
                 }
 
-                // Initialize bounding box variables with extreme values
-                let clusterMinX = Infinity;
-                let clusterMaxX = -Infinity;
-                let clusterMinY = Infinity;
-                let clusterMaxY = -Infinity;
-                let clusterCenterX = 0;
-                let clusterCenterY = 0;
-
-                let sumX = 0;
-                let sumY = 0;
-                let totalMass = 0;
-
-                for (const p of currentCluster) {
-                    sumX += p.x * p.mass;
-                    sumY += p.y * p.mass;
-                    totalMass += p.mass;
-
-                    // Update min/max values dynamically based on particle position and radius
-                    clusterMinX = Math.min(clusterMinX, p.x - p.radius);
-                    clusterMaxX = Math.max(clusterMaxX, p.x + p.radius);
-                    clusterMinY = Math.min(clusterMinY, p.y - p.radius);
-                    clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
-                }
-
-                // Calculate center of mass
-                if (totalMass > 0) {
-                    clusterCenterX = sumX / totalMass;
-                    clusterCenterY = sumY / totalMass;
-                } else {
-                    // Fallback if totalMass is 0 (should ideally not happen if currentCluster.length > 0)
-                    // Use the first particle's position as a fallback center
-                    clusterCenterX = currentCluster[0].x;
-                    clusterCenterY = currentCluster[0].y;
-                }
-
-
-                statsDisplay.classList.remove('hidden');
-
+                // If tracking a star, currentCluster will be empty, so handle star specifically
                 let displayObjectName = "";
                 let displayObjectX = 0;
                 let displayObjectY = 0;
@@ -1331,14 +1329,9 @@
                 let displayObjectSpeed = 0;
                 let displayObjectRotation = 0;
                 let displayObjectMass = 0;
-                let displayObjectCircularity = 1.0; // Initialize circularity
+                let displayObjectCircularity = 1.0;
                 let displayObjectArea = 0;
                 let displayObjectPerimeter = 0;
-
-
-                let Ixx = 0;
-                let Iyy = 0;
-                let Ixy = 0;
 
                 if (trackedParticle.isStar) {
                     displayObjectName = trackedParticle.name;
@@ -1348,14 +1341,14 @@
                     displayObjectVx = trackedParticle.vx;
                     displayObjectVy = trackedParticle.vy;
                     displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
-                    displayObjectRotation = 0;
+                    displayObjectRotation = 0; // Star doesn't rotate for stats
                     const starArea = Math.PI * trackedParticle.radius * trackedParticle.radius;
                     const starPerimeter = 2 * Math.PI * trackedParticle.radius;
                     displayObjectCircularity = 1.0; // Star is a perfect circle
                     displayObjectArea = starArea;
                     displayObjectPerimeter = starPerimeter;
                 } else {
-                    // currentCluster is guaranteed to be non-empty here due to checks above
+                    // For particles or clusters, calculate stats based on the identified cluster
                     displayObjectName = getClusterName(currentCluster);
 
                     let sumXForStats = 0;
@@ -1385,12 +1378,7 @@
                         const v_rel_y = p.vy - displayObjectVy;
 
                         totalAngularMomentum += p.mass * (r_x * v_rel_y - r_y * v_rel_x);
-
                         effectiveMomentOfInertia += p.mass * (r_x * r_x + r_y * r_y);
-
-                        Ixx += p.mass * r_y * r_y;
-                        Iyy += p.mass * r_x * r_x;
-                        Ixy += -p.mass * r_x * r_y;
                     }
 
                     displayObjectSpeed = Math.sqrt(displayObjectVx * displayObjectVx + displayObjectVy * displayObjectVy);
@@ -1399,7 +1387,6 @@
                         displayObjectRotation = angularSpeedRad * (180 / Math.PI);
                     }
 
-                    // Calculate circularity, area, and perimeter using the new method for clusters
                     const circularityResult = calculateCircularity(currentCluster);
                     displayObjectCircularity = circularityResult.circularity;
                     displayObjectArea = circularityResult.totalArea;
@@ -1414,11 +1401,13 @@
                     displayObjectMass,
                     displayObjectVx,
                     displayObjectVy,
-                    displayObjectCircularity, // Pass the newly calculated value
-                    displayObjectArea, // Pass the new area value
-                    displayObjectPerimeter, // Pass the new perimeter value
+                    displayObjectCircularity,
+                    displayObjectArea,
+                    displayObjectPerimeter,
                     displayObjectName
                 );
+
+                statsDisplay.classList.remove('hidden');
 
                 if (!isPaused) {
                     if (keys['w']) trackingOffsetY += CAMERA_MOVE_SPEED / zoomLevel;
@@ -1465,61 +1454,64 @@
             // Draw tracking indicator if tracking is on and a particle is tracked
             if (isTracking && trackedParticle) {
                 const currentCluster = findCluster(trackedParticle);
-                // If the tracked particle is no longer part of any cluster (e.g., absorbed), stop tracking.
-                if (currentCluster.length === 0) {
-                    isTracking = false;
-                    trackedParticle = null;
-                    toggleTrackingBtn.textContent = 'Toggle Tracking';
-                    statsDisplay.classList.add('hidden');
-                    cameraWorldX = 0;
-                    cameraWorldY = 0;
-                    return; // Exit early if tracking is stopped
-                }
+                
+                // If the tracked particle is the star, draw around it.
+                // If it was a regular particle and it got absorbed (no longer in findCluster), stop tracking handled above.
+                // If it's a particle that's now part of a cluster or a cluster itself, use cluster center.
+                let targetBoundingX, targetBoundingY;
 
-                // Initialize bounding box variables with extreme values
-                let clusterMinX = Infinity;
-                let clusterMaxX = -Infinity;
-                let clusterMinY = Infinity;
-                let clusterMaxY = -Infinity;
-                let clusterCenterX = 0;
-                let clusterCenterY = 0;
-
-                let sumX = 0;
-                let sumY = 0;
-                let totalMass = 0;
-
-                for (const p of currentCluster) {
-                    sumX += p.x * p.mass;
-                    sumY += p.y * p.mass;
-                    totalMass += p.mass;
-
-                    clusterMinX = Math.min(clusterMinX, p.x - p.radius);
-                    clusterMaxX = Math.max(clusterMaxX, p.x + p.radius);
-                    clusterMinY = Math.min(clusterMinY, p.y - p.radius);
-                    clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
-                }
-
-                // Calculate center of mass
-                if (totalMass > 0) {
-                    clusterCenterX = sumX / totalMass;
-                    clusterCenterY = sumY / totalMass;
+                if (trackedParticle.isStar) {
+                    targetBoundingX = trackedParticle.x;
+                    targetBoundingY = trackedParticle.y;
+                } else if (currentCluster.length > 0) {
+                    let sumX = 0;
+                    let sumY = 0;
+                    let totalMass = 0;
+                    for (const p of currentCluster) {
+                        sumX += p.x * p.mass;
+                        sumY += p.y * p.mass;
+                        totalMass += p.mass;
+                    }
+                    targetBoundingX = sumX / totalMass;
+                    targetBoundingY = sumY / totalMass;
                 } else {
-                    // Fallback if totalMass is 0 (should ideally not happen if currentCluster.length > 0)
-                    clusterCenterX = currentCluster[0].x;
-                    clusterCenterY = currentCluster[0].y;
+                    // This case should ideally be caught by the earlier check where isTracking is set to false.
+                    // But as a fallback, if currentCluster is empty, don't draw.
+                    targetBoundingX = trackedParticle.x;
+                    targetBoundingY = trackedParticle.y;
                 }
 
+                // If tracking a star, use its radius. Otherwise, calculate bounding box of cluster.
+                let trackingCircleRadius;
+                if (trackedParticle.isStar) {
+                    trackingCircleRadius = trackedParticle.radius + 5; // Slightly larger than star
+                } else if (currentCluster.length > 0) {
+                    let clusterMinX = Infinity;
+                    let clusterMaxX = -Infinity;
+                    let clusterMinY = Infinity;
+                    let clusterMaxY = -Infinity;
 
-                ctx.strokeStyle = '#00FF00';
-                ctx.lineWidth = 1;
+                    for (const p of currentCluster) {
+                        clusterMinX = Math.min(clusterMinX, p.x - p.radius);
+                        clusterMaxX = Math.max(clusterMaxX, p.x + p.radius);
+                        clusterMinY = Math.min(clusterMinY, p.y - p.radius);
+                        clusterMaxY = Math.max(clusterMaxY, p.y + p.radius);
+                    }
+                    const boundingBoxWidth = clusterMaxX - clusterMinX;
+                    const boundingBoxHeight = clusterMaxY - clusterMinY;
+                    trackingCircleRadius = Math.sqrt(boundingBoxWidth * boundingBoxWidth + boundingBoxHeight * boundingBoxHeight) / 2 + 5;
+                } else {
+                    // No valid cluster found, effectively stop drawing tracking indicator
+                    trackingCircleRadius = 0;
+                }
 
-                const boundingBoxWidth = clusterMaxX - clusterMinX;
-                const boundingBoxHeight = clusterMaxY - clusterMinY;
-                const trackingCircleRadius = Math.sqrt(boundingBoxWidth * boundingBoxWidth + boundingBoxHeight * boundingBoxHeight) / 2 + 5;
-
-                ctx.beginPath();
-                ctx.arc(clusterCenterX, clusterCenterY, trackingCircleRadius, 0, Math.PI * 2);
-                ctx.stroke();
+                if (trackingCircleRadius > 0) {
+                    ctx.strokeStyle = '#00FF00';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(targetBoundingX, targetBoundingY, trackingCircleRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
             }
 
             // Draw Roche Limit if enabled
@@ -1660,7 +1652,10 @@
                     let initialClusterCenterX = clickedParticle.x;
                     let initialClusterCenterY = clickedParticle.y;
 
-                    if (initialCluster.length > 0) {
+                    if (trackedParticle.isStar) {
+                        initialClusterCenterX = trackedParticle.x;
+                        initialClusterCenterY = trackedParticle.y;
+                    } else if (initialCluster.length > 0) {
                         let sumX = 0;
                         let sumY = 0;
                         let totalMass = 0;
@@ -1699,6 +1694,7 @@
                 cameraWorldY = 0;
                 statsDisplay.classList.add('hidden');
             } else {
+                // If tracking is turned ON but no particle is currently tracked, default to the star.
                 if (!trackedParticle) {
                     trackedParticle = particles.find(p => p.isStar);
                     if (trackedParticle) {
@@ -1860,9 +1856,9 @@
         window.onload = function() {
             resizeCanvas();
 
-            // Attempt to load sounds (they will just fail silently if not found)
-            crashloudAudio = new Audio('crashloud.mp3');
-            crashquietAudio = new Audio('crashquiet.mp3');
+            // Load the new "bonk" sounds
+            crashloudAudio = new Audio('bonkloud.mp3');
+            crashquietAudio = new Audio('bonkquiet.mp3');
 
             minParticleSizeInput.value = MIN_PARTICLE_RADIUS;
             maxParticleSizeInput.value = MAX_PARTICLE_RADIUS;
