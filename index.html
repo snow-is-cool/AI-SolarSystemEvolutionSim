@@ -312,7 +312,7 @@
 </head>
 <body>
     <div class="main-content-wrapper p-6 bg-gray-800 rounded-xl shadow-lg mx-auto my-8">
-        <a href="https://hotsnow3241.github.io/home" target="_blank" class="home-button">
+        <a href="https://hotsnow3241.github.io/home" id="homeButton" class="home-button">
             <img src="tohome.png" alt="Home">
         </a>
         <h1 class="text-3xl font-bold mb-2 text-blue-300">2D Solar System Evolution</h1>
@@ -347,6 +347,12 @@
                 <button id="toggleScrollLockBtn" class="btn-primary">Lock Scroll</button>
                 <button id="toggleSettingsBtn" class="btn-primary">Hide Settings</button>
                 <button id="toggleRocheLimitBtn" class="btn-primary">Show Roche Limit</button> </div>
+
+            <div id="globalStatsBar" class="global-stats-bar">
+                <span>Simulation Time: <span id="simTimeDisplay">0</span> frames</span>
+                <span>Total Particles: <span id="totalParticlesDisplay">0</span></span>
+                <span>Total Clusters: <span id="totalClustersDisplay">0</span></span>
+            </div>
 
             <div id="modifierGroup" class="modifier-group">
                 <div class="modifier-group-title">Simulation Settings</div>
@@ -389,12 +395,6 @@
                 <button id="resetDefaultsBtn" class="btn-primary mt-2">Reset to Defaults</button> </div>
         </div>
 
-        <div id="globalStatsBar" class="global-stats-bar">
-            <span>Simulation Time: <span id="simTimeDisplay">0</span> frames</span>
-            <span>Total Particles: <span id="totalParticlesDisplay">0</span></span>
-            <span>Total Clusters: <span id="totalClustersDisplay">0</span></span>
-        </div>
-
     </div>
 
     <script>
@@ -410,6 +410,7 @@
         const toggleTrackingBtn = document.getElementById('toggleTrackingBtn');
         const statsDisplay = document.getElementById('statsDisplay');
         const particleCountInput = document.getElementById('particleCountInput');
+        const homeButton = document.getElementById('homeButton'); // Get the home button
 
         // Input elements for adjustable constants
         const minParticleSizeInput = document.getElementById('minParticleSizeInput');
@@ -440,6 +441,14 @@
         const resetDefaultsBtn = document.getElementById('resetDefaultsBtn');
         const toggleRocheLimitBtn = document.getElementById('toggleRocheLimitBtn');
 
+        // --- Sound Variables ---
+        let crashloudAudio = null;
+        let crashquietAudio = null;
+
+        // Collision sound thresholds (Impact speed)
+        const LOUD_IMPACT_THRESHOLD = 3.0; // Speed above which crashloud.mp3 plays
+        const QUIET_IMPACT_THRESHOLD = 0.25; // Speed below which no sound plays
+        const MAX_AUDIO_VOLUME = 0.8; // Max volume for sounds
 
         // --- Simulation Constants (now 'let' to be adjustable) ---
         // Store initial default values separately for the reset button
@@ -859,6 +868,15 @@
             }
         }
 
+        // Helper function to play sound
+        function playCollisionSound(audioElement, volume) {
+            if (audioElement) {
+                const clonedAudio = audioElement.cloneNode();
+                clonedAudio.volume = Math.max(0, Math.min(MAX_AUDIO_VOLUME, volume)); // Clamp volume
+                clonedAudio.play().catch(e => { /* console.error("Audio playback error:", e); */ }); // Catch and ignore play errors
+            }
+        }
+
         function handleCollisions() {
             const activeParticles = particles.filter(p => p.isAlive);
 
@@ -884,7 +902,7 @@
                                 absorber.mass += absorbed.mass;
                                 absorbed.isAlive = false;
                             }
-                            continue;
+                            continue; // Skip rest of collision logic for star absorption
                         }
 
                         // --- Particle-Particle Collision (Dampened Bounce/Clumping ONLY) ---
@@ -914,6 +932,27 @@
                         p1.vy -= (impulse / p1.mass) * normalY;
                         p2.vx += (impulse / p2.mass) * normalX;
                         p2.vy += (impulse / p2.mass) * normalY;
+
+                        // --- Sound Logic ---
+                        // Check if they are already part of the same cluster
+                        const p1Cluster = findCluster(p1);
+                        const p2Cluster = findCluster(p2);
+
+                        const areSameCluster = p1Cluster.some(p => p === p2);
+
+                        if (!areSameCluster) { // Only play sound if they are NOT part of the same cluster
+                            const absImpactSpeed = Math.abs(impactVelocityAlongNormal);
+
+                            if (absImpactSpeed >= LOUD_IMPACT_THRESHOLD) {
+                                playCollisionSound(crashloudAudio, MAX_AUDIO_VOLUME);
+                            } else if (absImpactSpeed > QUIET_IMPACT_THRESHOLD) {
+                                // Scale volume between 0 and MAX_AUDIO_VOLUME based on speed relative to thresholds
+                                const volume = (absImpactSpeed - QUIET_IMPACT_THRESHOLD) /
+                                               (LOUD_IMPACT_THRESHOLD - QUIET_IMPACT_THRESHOLD);
+                                playCollisionSound(crashquietAudio, volume);
+                            }
+                            // else: speed <= QUIET_IMPACT_THRESHOLD, no sound plays
+                        }
                     }
                 }
             }
@@ -1038,7 +1077,7 @@
             // Calculate the area of a circle with the same perimeter as the cluster's convex hull.
             // Perimeter of a circle = 2 * PI * r_equivalent
             // r_equivalent = Perimeter / (2 * PI)
-            // Area of equivalent circle = PI * r_equivalent^2 = PI * (Perimeter / (2 * PI))^2 = PI * Perimeter^2 / (4 * PI)
+            // Area of equivalent circle = PI * r_equivalent^2 = PI * Perimeter^2 / (4 * PI)
             const areaOfEquivalentCircle = (clusterPerimeter * clusterPerimeter) / (4 * Math.PI);
 
             // Circularity is the ratio of the cluster's actual area to the area of a circle with the same perimeter.
@@ -1528,6 +1567,14 @@
             canvas.height = canvas.offsetHeight;
         }
 
+        // Home button functionality
+        homeButton.addEventListener('click', (event) => {
+            // Prevent the default link behavior
+            event.preventDefault();
+            // Navigate to the homepage in the same tab
+            window.location.href = homeButton.href;
+        });
+
         resetSimBtn.addEventListener('click', initSimulation);
         resetViewBtn.addEventListener('click', resetView);
 
@@ -1812,6 +1859,10 @@
 
         window.onload = function() {
             resizeCanvas();
+
+            // Attempt to load sounds (they will just fail silently if not found)
+            crashloudAudio = new Audio('crashloud.mp3');
+            crashquietAudio = new Audio('crashquiet.mp3');
 
             minParticleSizeInput.value = MIN_PARTICLE_RADIUS;
             maxParticleSizeInput.value = MAX_PARTICLE_RADIUS;
