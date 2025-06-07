@@ -312,7 +312,7 @@
 </head>
 <body>
     <div class="main-content-wrapper p-6 bg-gray-800 rounded-xl shadow-lg mx-auto my-8">
-        <a href="https://hotsnow3241.github.io/home" id="homeButton" class="home-button">
+        <a href="https://snow-is-cool.github.io/home" id="homeButton" class="home-button">
             <img src="tohome.png" alt="Home">
         </a>
         <h1 class="text-3xl font-bold mb-2 text-blue-300">2D Solar System Evolution</h1>
@@ -454,6 +454,7 @@
         const CVC_LOUD_VOLUME = 0.5; // Fixed volume for loud Cluster vs Cluster crashes
 
         const MAX_AUDIBLE_DISTANCE = 1500; // Distance beyond which sounds fade out completely
+        const MIN_VOLUME_AT_MAX_DISTANCE_FACTOR = 0.05; // At MAX_AUDIBLE_DISTANCE, volume will be 5% of baseVolume
 
         // --- Simulation Constants (now 'let' to be adjustable) ---
         // Store initial default values separately for the reset button
@@ -881,12 +882,15 @@
                     Math.pow(impactY - cameraWorldY, 2)
                 );
 
-                let attenuatedVolume = baseVolume;
-                if (distance > 0) {
-                    // Volume linearly decreases from baseVolume at 0 distance to 0 at MAX_AUDIBLE_DISTANCE
-                    const distanceFactor = 1 - (distance / MAX_AUDIBLE_DISTANCE);
-                    attenuatedVolume = baseVolume * Math.max(0, distanceFactor); // Ensure volume doesn't go negative
-                }
+                // Calculate distance attenuation factor with a minimum volume
+                let distanceFactor = 1 - (distance / MAX_AUDIBLE_DISTANCE); // Goes from 1 (at 0 distance) to 0 (at MAX_AUDIBLE_DISTANCE)
+                distanceFactor = Math.max(0, distanceFactor); // Clamp at 0, ensures no negative volume
+
+                // Interpolate between MIN_VOLUME_AT_MAX_DISTANCE_FACTOR and 1 based on distanceFactor
+                // This ensures volume doesn't drop completely to zero at MAX_AUDIBLE_DISTANCE
+                let attenuatedFactor = MIN_VOLUME_AT_MAX_DISTANCE_FACTOR + (1 - MIN_VOLUME_AT_MAX_DISTANCE_FACTOR) * distanceFactor;
+
+                let attenuatedVolume = baseVolume * attenuatedFactor;
 
                 const clonedAudio = audioElement.cloneNode();
                 clonedAudio.volume = Math.max(0, Math.min(MAX_AUDIO_VOLUME, attenuatedVolume)); // Clamp final volume
@@ -1746,7 +1750,7 @@
                     return;
                 }
                 const currentX = event.clientX || event.touches[0].clientX;
-                const currentY = event.clientY || event.touches[0].clientY;
+                const currentY = event.touches[0].clientY;
 
                 const dx = currentX - lastMouseX;
                 const dy = currentY - lastMouseY;
